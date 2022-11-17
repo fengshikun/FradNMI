@@ -115,15 +115,16 @@ class PCQM4MV2_XYZ_BIAS(PCQM4MV2_XYZ):
         noise_feat = torch.linalg.norm(noise_coords[:,edges_src] - noise_coords[:,edges_dst], dim=2)
         feat = torch.linalg.norm(coords[edges_src] - coords[edges_dst], dim=1)
         loss_lst = torch.mean((noise_feat**2 - feat ** 2)**2, dim=1)
-        sorted_value, sorted_idx = torch.sort(loss_lst)
+        # sorted_value, sorted_idx = torch.sort(loss_lst)
         
-        min_violate_idx, max_violate_idx = sorted_idx[0], sorted_idx[-1]
+        # min_violate_idx, max_violate_idx = sorted_idx[0], sorted_idx[-1]
         
         if self.violate:
-            new_coords = noise_coords[max_violate_idx]
+            # new_coords = noise_coords[max_violate_idx]
+            new_coords = noise_coords[torch.argmax(loss_lst)]
         else:
-            new_coords = noise_coords[min_violate_idx]
-        
+            # new_coords = noise_coords[min_violate_idx]
+            new_coords = noise_coords[torch.argmin(loss_lst)]
         
         org_data.pos_target = new_coords - coords
         org_data.pos = new_coords
