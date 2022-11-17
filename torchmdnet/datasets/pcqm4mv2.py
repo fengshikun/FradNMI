@@ -5,10 +5,20 @@ from tqdm import tqdm
 import glob
 import ase
 import numpy as np
+from rdkit import Chem
+from torchmdnet.utils import isRingAromatic, get_geometry_graph_ring
+from typing import Any, Callable, List, Optional, Tuple, Union
+from collections.abc import Sequence
+from torch import Tensor
+IndexType = Union[slice, Tensor, np.ndarray, Sequence]
+
 
 import torch
 from torch_geometric.data import (InMemoryDataset, download_url, extract_zip,
                                   Data)
+
+
+
 
 
 class PCQM4MV2_XYZ(InMemoryDataset):
@@ -57,6 +67,70 @@ class PCQM4MV2_XYZ(InMemoryDataset):
 
         torch.save(self.collate(data_list), self.processed_paths[0])
 
+
+# Globle variable
+MOL_LST = None
+class PCQM4MV2_XYZ_BIAS(PCQM4MV2_XYZ):
+    #  sdf path: pcqm4m-v2-train.sdf
+    # set the transform to None
+    def __init__(self, root: str, sdf_path: str, position_noise_scale: float, sample_number: int, violate: bool, transform: Optional[Callable] = None,
+                 pre_transform: Optional[Callable] = None,
+                 pre_filter: Optional[Callable] = None, dataset_arg: Optional[str] = None):
+        assert dataset_arg is None, "PCQM4MV2_XYZ_BIAS does not take any dataset args."
+        super().__init__(root, transform, pre_transform, pre_filter)
+        # self.suppl = Chem.SDMolSupplier(sdf_path)
+        self.position_noise_scale = position_noise_scale
+        self.sample_number = sample_number
+        self.violate = violate
+        global MOL_LST
+        if MOL_LST is None:
+            import pickle
+            with open(sdf_path, 'rb') as handle:
+                MOL_LST = pickle.load(handle)
+            # MOL_LST = Chem.SDMolSupplier(sdf_path)
+            # MOL_LST = np.load(sdf_path, allow_pickle=True)
+        # import pickle
+        # with open(sdf_path, 'rb') as handle:
+        #     self.mol_lst = pickle.load(handle)
+
+        print('PCQM4MV2_XYZ_BIAS Initialization finished')
+
+    def transform_noise(self, data, position_noise_scale):
+        noise = torch.randn_like(data) * position_noise_scale
+        data_noise = data + noise
+        return data_noise
+
+    def __getitem__(self, idx: Union[int, np.integer, IndexType]) -> Union['Dataset', Data]:
+        org_data = super().__getitem__(idx)
+        # change org_data coordinate
+        # get mol
+        molinfo = MOL_LST[idx.item()]
+        edges_src, edges_dst, org_coordinate = molinfo
+        atom_woh_number = org_coordinate.shape[0]
+        
+        coords = org_data.pos
+
+        repeat_coords = coords.unsqueeze(0).repeat(self.sample_number, 1, 1)
+        noise_coords = self.transform_noise(repeat_coords, self.position_noise_scale)
+        noise_feat = torch.linalg.norm(noise_coords[:,edges_src] - noise_coords[:,edges_dst], dim=2)
+        feat = torch.linalg.norm(coords[edges_src] - coords[edges_dst], dim=1)
+        loss_lst = torch.mean((noise_feat**2 - feat ** 2)**2, dim=1)
+        sorted_value, sorted_idx = torch.sort(loss_lst)
+        
+        min_violate_idx, max_violate_idx = sorted_idx[0], sorted_idx[-1]
+        
+        if self.violate:
+            new_coords = noise_coords[max_violate_idx]
+        else:
+            new_coords = noise_coords[min_violate_idx]
+        
+        
+        org_data.pos_target = new_coords - coords
+        org_data.pos = new_coords
+        
+        
+
+        return org_data
 
 
 class PCQM4MV2_3D:

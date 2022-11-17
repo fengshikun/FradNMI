@@ -6,6 +6,51 @@ from os.path import dirname, join, exists
 from pytorch_lightning.utilities import rank_zero_warn
 
 
+# code from equibind:
+
+def isRingAromatic(mol, bondRing):
+    for id in bondRing:
+        if not mol.GetBondWithIdx(id).GetIsAromatic():
+            return False
+    return True
+
+def get_geometry_graph_ring(lig, only_atom_ring=False):
+    # coords = lig.GetConformer().GetPositions()
+    rings = lig.GetRingInfo().AtomRings()
+    bond_rings = lig.GetRingInfo().BondRings()
+    edges_src = []
+    edges_dst = []
+    for i, atom in enumerate(lig.GetAtoms()):
+        src_idx = atom.GetIdx()
+        assert src_idx == i
+        if not only_atom_ring:
+            one_hop_dsts = [neighbor for neighbor in list(atom.GetNeighbors())]
+            two_and_one_hop_idx = [neighbor.GetIdx() for neighbor in one_hop_dsts]
+            for one_hop_dst in one_hop_dsts:
+                for two_hop_dst in one_hop_dst.GetNeighbors():
+                    two_and_one_hop_idx.append(two_hop_dst.GetIdx())
+            all_dst_idx = list(set(two_and_one_hop_idx))
+        else:
+            all_dst_idx = []
+        for ring_idx, ring in enumerate(rings):
+            if src_idx in ring and isRingAromatic(lig,bond_rings[ring_idx]):
+                all_dst_idx.extend(list(ring))
+        all_dst_idx = list(set(all_dst_idx))
+        if len(all_dst_idx) == 0: continue
+        all_dst_idx.remove(src_idx)
+        all_src_idx = [src_idx] *len(all_dst_idx)
+        edges_src.extend(all_src_idx)
+        edges_dst.extend(all_dst_idx)
+    
+    coords = lig.GetConformer().GetPositions()
+    # graph = dgl.graph((torch.tensor(edges_src), torch.tensor(edges_dst)), num_nodes=lig.GetNumAtoms(), idtype=torch.long)
+    feat = torch.from_numpy(np.linalg.norm(coords[edges_src] - coords[edges_dst], axis=1).astype(np.float32))
+    return edges_src, edges_dst, feat
+    # return {'edges_src': edges_src, 'edges_dst': edges_dst, 'feat': feat}
+    # return graph
+
+
+
 def train_val_test_split(dset_len, train_size, val_size, test_size, seed, order=None):
     assert (train_size is None) + (val_size is None) + (
         test_size is None

@@ -13,7 +13,8 @@ from torch_scatter import scatter
 class DataModule(LightningDataModule):
     def __init__(self, hparams, dataset=None):
         super(DataModule, self).__init__()
-        self.hparams = hparams.__dict__ if hasattr(hparams, "__dict__") else hparams
+        self._set_hparams(hparams.__dict__ if hasattr(hparams, "__dict__") else hparams)
+        # self.hparams = hparams.__dict__ if hasattr(hparams, "__dict__") else hparams
         self._mean, self._std = None, None
         self._saved_dataloaders = dict()
         self.dataset = dataset
@@ -28,7 +29,7 @@ class DataModule(LightningDataModule):
                     self.hparams["force_files"],
                 )
             else:
-                if self.hparams['position_noise_scale'] > 0.:
+                if self.hparams['position_noise_scale'] > 0. and 'BIAS' not in self.hparams['dataset']:
                     def transform(data):
                         noise = torch.randn_like(data.pos) * self.hparams['position_noise_scale']
                         data.pos_target = noise
@@ -37,7 +38,10 @@ class DataModule(LightningDataModule):
                 else:
                     transform = None
 
-                dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"], transform=t)
+                if 'BIAS' in self.hparams['dataset']:
+                    dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], self.hparams['sdf_path'], self.hparams['position_noise_scale'], self.hparams['sample_number'], self.hparams['violate'], dataset_arg=self.hparams["dataset_arg"], transform=t)
+                else:
+                    dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"], transform=t)
 
                 # Noisy version of dataset
                 self.dataset_maybe_noisy = dataset_factory(transform)
@@ -101,7 +105,7 @@ class DataModule(LightningDataModule):
 
     def _get_dataloader(self, dataset, stage, store_dataloader=True):
         store_dataloader = (
-            store_dataloader and not self.trainer.reload_dataloaders_every_epoch
+            store_dataloader and not self.trainer.reload_dataloaders_every_n_epochs
         )
         if stage in self._saved_dataloaders and store_dataloader:
             # storing the dataloaders like this breaks calls to trainer.reload_train_val_dataloaders
