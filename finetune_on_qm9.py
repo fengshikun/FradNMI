@@ -1,3 +1,5 @@
+# python finetune_on_qm9.py --pretrain_model /home/AI4Science/fengsk/Pretraining-Denoising/experiments/ET-PCQM4MV2_var0.04/step=399999-epoch=8-val_loss=0.1241-test_loss=0.2535-train_per_step=0.1218.ckpt --job_prefix pretrain_baseline_var0.04;
+
 import os
 import argparse
 
@@ -18,5 +20,8 @@ if __name__ == "__main__":
     job_prefix = args.job_prefix
 
     for task in qm9_task:
-        base_cmd = f'srun -em=64000 --gres=gpu:1 --time 6-12:00:00 --job-name {job_prefix}_qm9_{task}_finetuning python -u scripts/train.py  scripts/train.py --conf examples/ET-QM9-FT.yaml --layernorm-on-vec whitened --job-id {job_prefix}_qm9_{task}_finetuning --dataset-arg {task} --pretrained-model {pretrain_model} > {job_prefix}_qm9_{task}_finetuning.log 2>&1 &'
+        base_cmd = f'srun --mem=64000 --gres=gpu:1 --time 6-12:00:00 --job-name {job_prefix}_qm9_{task}_finetuning python -u scripts/train.py --conf examples/ET-QM9-FT.yaml --layernorm-on-vec whitened --job-id {job_prefix}_qm9_{task}_finetuning --dataset-arg {task} --pretrained-model {pretrain_model} > {job_prefix}_qm9_{task}_finetuning.log 2>&1 &'
+
+        # base_cmd = f'srun --mem=64000 --gres=gpu:a100-80G --time 6-12:00:00 --job-name {job_prefix}_qm9_{task}_finetuning python -u scripts/train.py --conf examples/ET-QM9-FT.yaml --layernorm-on-vec whitened --job-id {job_prefix}_qm9_{task}_finetuning --dataset-arg {task} --pretrained-model {pretrain_model} > {job_prefix}_qm9_{task}_finetuning.log 2>&1 &'
+        os.system(base_cmd)
     pass
