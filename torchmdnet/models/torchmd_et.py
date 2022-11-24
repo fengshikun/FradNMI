@@ -124,6 +124,7 @@ class TorchMD_ET(nn.Module):
         )
 
         self.attention_layers = nn.ModuleList()
+        self.vec_norms = nn.ModuleList()
         for _ in range(num_layers):
             layer = EquivariantMultiHeadAttention(
                 hidden_channels,
@@ -136,6 +137,10 @@ class TorchMD_ET(nn.Module):
                 cutoff_upper,
             ).jittable()
             self.attention_layers.append(layer)
+            self.vec_norms.append(EquivariantLayerNorm(hidden_channels))
+
+        self.x_norm = nn.LayerNorm(hidden_channels, elementwise_affine=False)
+        
 
         self.out_norm = nn.LayerNorm(hidden_channels)
         if self.layernorm_on_vec:
@@ -167,22 +172,36 @@ class TorchMD_ET(nn.Module):
 
         edge_attr = self.distance_expansion(edge_weight)
         mask = edge_index[0] != edge_index[1]
-        edge_vec[mask] = edge_vec[mask] / torch.norm(edge_vec[mask], dim=1).unsqueeze(1)
+        edge_vec[mask] = edge_vec[mask] / (torch.norm(edge_vec[mask], dim=1).unsqueeze(1) + 1e-6)
+        if torch.isnan(edge_vec).sum():
+            print('nan happens')
 
         if self.neighbor_embedding is not None:
             x = self.neighbor_embedding(z, x, edge_index, edge_weight, edge_attr)
 
         vec = torch.zeros(x.size(0), 3, x.size(1), device=x.device)
 
-        for attn in self.attention_layers:
+        for lidx, attn in enumerate(self.attention_layers):
             dx, dvec = attn(x, vec, edge_index, edge_weight, edge_attr, edge_vec)
             x = x + dx
+            x = self.x_norm(x)
             vec = vec + dvec
-        x = self.out_norm(x)
+            vec = self.vec_norms[lidx](vec)
+        if torch.isnan(x).sum():
+            print('nan 1111111')
+        if torch.isnan(vec).sum():
+            print('nan vec 1111111')
+            # import pdb; pdb.set_trace()
+        # x = torch.clip(x, min=-1e+10, max=1e+10)
+        # vec = torch.clip(vec, min=-1e+10, max=1e+10)
+        newx = self.out_norm(x)
+        if torch.isnan(newx).sum():
+            print('nan 22222222')
+            # import pdb; pdb.set_trace()
         if self.layernorm_on_vec:
             vec = self.out_norm_vec(vec)
 
-        return x, vec, z, pos, batch
+        return newx, vec, z, pos, batch
 
     def __repr__(self):
         return (
