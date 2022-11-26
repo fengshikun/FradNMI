@@ -19,7 +19,7 @@ class QM9(QM9_geometric):
         if transform is None:
             transform = self._filter_label
         else:
-            transform = Compose([transform, self._filter_label])
+            transform = Compose([self._filter_label, transform])
 
         super(QM9, self).__init__(root, transform=transform)
 

@@ -124,6 +124,7 @@ class TorchMD_ET(nn.Module):
         )
 
         self.attention_layers = nn.ModuleList()
+        self.vec_norms = nn.ModuleList()
         for _ in range(num_layers):
             layer = EquivariantMultiHeadAttention(
                 hidden_channels,
@@ -136,8 +137,10 @@ class TorchMD_ET(nn.Module):
                 cutoff_upper,
             ).jittable()
             self.attention_layers.append(layer)
+            self.vec_norms.append(EquivariantLayerNorm(hidden_channels))
 
         self.out_norm = nn.LayerNorm(hidden_channels)
+        self.x_norm = nn.LayerNorm(hidden_channels, elementwise_affine=False)
         if self.layernorm_on_vec:
             if self.layernorm_on_vec == "whitened":
                 self.out_norm_vec = EquivariantLayerNorm(hidden_channels)
@@ -168,21 +171,29 @@ class TorchMD_ET(nn.Module):
         edge_attr = self.distance_expansion(edge_weight)
         mask = edge_index[0] != edge_index[1]
         edge_vec[mask] = edge_vec[mask] / torch.norm(edge_vec[mask], dim=1).unsqueeze(1)
+        
 
         if self.neighbor_embedding is not None:
             x = self.neighbor_embedding(z, x, edge_index, edge_weight, edge_attr)
 
         vec = torch.zeros(x.size(0), 3, x.size(1), device=x.device)
 
-        for attn in self.attention_layers:
+        for lidx, attn in enumerate(self.attention_layers):
             dx, dvec = attn(x, vec, edge_index, edge_weight, edge_attr, edge_vec)
-            x = x + dx
+            x = x + dx # may be nan
+            x = self.x_norm(x)
             vec = vec + dvec
-        x = self.out_norm(x)
+            vec = self.vec_norms[lidx](vec)
+        if torch.isnan(x).sum():
+            print('nan happens1111')
+        # x = torch.clip(x, min=-1e+7, max=1e+7)
+        xnew = self.out_norm(x)
+        if torch.isnan(xnew).sum():
+            import pdb; pdb.set_trace()# print('nan happens2222')
         if self.layernorm_on_vec:
             vec = self.out_norm_vec(vec)
 
-        return x, vec, z, pos, batch
+        return xnew, vec, z, pos, batch
 
     def __repr__(self):
         return (

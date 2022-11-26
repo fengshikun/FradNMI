@@ -114,9 +114,16 @@ class LNNP(LightningModule):
 
             if batch.y.ndim == 1:
                 batch.y = batch.y.unsqueeze(1)
+            
+            # if self.hparams["prior_model"] == "Atomref":
+            #     batch.y = self.get_energy(batch)
 
+            if torch.isnan(pred).sum():
+                print('pred nan happends')
             # energy/prediction loss
             loss_y = loss_fn(pred, batch.y)
+            if torch.isnan(loss_y).sum():
+                print('loss nan happens')
 
             if stage in ["train", "val"] and self.hparams.ema_alpha_y < 1:
                 if self.ema[stage + "_y"] is None:

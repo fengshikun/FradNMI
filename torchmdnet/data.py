@@ -34,6 +34,8 @@ class DataModule(LightningDataModule):
                         noise = torch.randn_like(data.pos) * self.hparams['position_noise_scale']
                         data.pos_target = noise
                         data.pos = data.pos + noise
+                        if self.hparams["prior_model"] == "Atomref":
+                            data.y = self.get_energy_data(data)
                         return data
                 else:
                     transform = None
@@ -131,6 +133,16 @@ class DataModule(LightningDataModule):
             self._saved_dataloaders[stage] = dl
         return dl
 
+    def get_energy_data(self, data):
+        if data.y is None:
+            raise MissingEnergyException()
+
+
+        # remove atomref energies from the target energy
+        atomref_energy = self.atomref.squeeze()[data.z].sum()
+        return (data.y.squeeze() - atomref_energy).unsqueeze(dim=0).unsqueeze(dim=1)
+
+
     def _standardize(self):
         def get_energy(batch, atomref):
             if batch.y is None:
@@ -149,7 +161,8 @@ class DataModule(LightningDataModule):
         )
         try:
             # only remove atomref energies if the atomref prior is used
-            atomref = self.atomref if self.hparams["prior_model"] == "Atomref" else None
+            # atomref = self.atomref if self.hparams["prior_model"] == "Atomref" else None
+            atomref = None
             # extract energies from the data
             ys = torch.cat([get_energy(batch, atomref) for batch in data])
         except MissingEnergyException:

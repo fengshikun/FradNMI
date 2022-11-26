@@ -70,6 +70,8 @@ class PCQM4MV2_XYZ(InMemoryDataset):
 
 # Globle variable
 MOL_LST = None
+MOL_DEBUG_LST = None
+debug = False
 class PCQM4MV2_XYZ_BIAS(PCQM4MV2_XYZ):
     #  sdf path: pcqm4m-v2-train.sdf
     # set the transform to None
@@ -87,8 +89,11 @@ class PCQM4MV2_XYZ_BIAS(PCQM4MV2_XYZ):
             import pickle
             with open(sdf_path, 'rb') as handle:
                 MOL_LST = pickle.load(handle)
-            # MOL_LST = Chem.SDMolSupplier(sdf_path)
-            # MOL_LST = np.load(sdf_path, allow_pickle=True)
+        if debug:
+            global MOL_DEBUG_LST
+            if MOL_DEBUG_LST is None:
+                # MOL_DEBUG_LST = Chem.SDMolSupplier("pcqm4m-v2-train.sdf")
+                MOL_DEBUG_LST = np.load("mol_iter_all.npy", allow_pickle=True)
         # import pickle
         # with open(sdf_path, 'rb') as handle:
         #     self.mol_lst = pickle.load(handle)
@@ -129,7 +134,37 @@ class PCQM4MV2_XYZ_BIAS(PCQM4MV2_XYZ):
         org_data.pos_target = new_coords - coords
         org_data.pos = new_coords
         
-        
+        if debug:
+            import copy
+            from rdkit.Geometry import Point3D
+            mol = MOL_DEBUG_LST[idx.item()]
+            violate_coords = noise_coords[torch.argmax(loss_lst)].cpu().numpy()
+            n_violate_coords = noise_coords[torch.argmin(loss_lst)].cpu().numpy()
+            mol_cpy = copy.copy(mol)
+            conf = mol_cpy.GetConformer()
+            for i in range(mol.GetNumAtoms()):
+                x,y,z = n_violate_coords[i]
+                conf.SetAtomPosition(i, Point3D(float(x), float(y), float(z)))
+            
+
+            writer = Chem.SDWriter('org.sdf')
+            writer.write(mol)
+            writer.close()
+
+            # supplier = Chem.SDMolSupplier('v3000.sdf')
+            writer = Chem.SDWriter('min_noise.sdf')
+            writer.write(mol_cpy)
+            writer.close()
+            # show mol coordinate
+            mol_cpy = copy.copy(mol)
+            conf = mol_cpy.GetConformer()
+            for i in range(mol.GetNumAtoms()):
+                x,y,z = violate_coords[i]
+                conf.SetAtomPosition(i, Point3D(float(x), float(y), float(z)))
+
+            writer = Chem.SDWriter('max_noise.sdf')
+            writer.write(mol_cpy)
+            writer.close()
 
         return org_data
 
