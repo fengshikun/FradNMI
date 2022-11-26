@@ -48,7 +48,13 @@ class DataModule(LightningDataModule):
                 # Noisy version of dataset
                 self.dataset_maybe_noisy = dataset_factory(transform)
                 # Clean version of dataset
-                self.dataset = dataset_factory(None)
+                if self.hparams["prior_model"] == "Atomref":
+                    def transform_atomref(data):
+                        data.y = self.get_energy_data(data)
+                        return data
+                    self.dataset = dataset_factory(transform_atomref)
+                else:
+                    self.dataset = dataset_factory(None)
 
         self.idx_train, self.idx_val, self.idx_test = make_splits(
             len(self.dataset),
