@@ -123,7 +123,9 @@ def load_model(filepath, args=None, device="cpu", mean=None, std=None, **kwargs)
     if len(loading_return.unexpected_keys) > 0:
         # Should only happen if not applying denoising during fine-tuning.
         assert all(("output_model_noise" in k or "pos_normalizer" in k) for k in loading_return.unexpected_keys)
-    assert len(loading_return.missing_keys) == 0, f"Missing keys: {loading_return.missing_keys}"
+    # assert len(loading_return.missing_keys) == 0, f"Missing keys: {loading_return.missing_keys}"
+    if len(loading_return.missing_keys) > 0:
+        print(f'warning:  load model missing keys {loading_return.missing_keys}')
 
     if mean:
         model.mean = mean
