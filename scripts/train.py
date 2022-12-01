@@ -78,6 +78,9 @@ def get_args():
     parser.add_argument('--violate', type=bool, default=False, help='violate conformation rules or not.')
 
 
+    parser.add_argument('--dihedral-angle-noise-scale', default=0., type=float, help='Weighting factor for denoising in the loss function.')
+    parser.add_argument('--composition', type=bool, default=False, help='violate conformation rules or not.')
+
     # model architecture
     parser.add_argument('--model', type=str, default='graph-network', choices=models.__all__, help='Which model to train')
     parser.add_argument('--output-model', type=str, default='Scalar', choices=output_modules.__all__, help='The type of output model')
