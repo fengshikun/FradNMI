@@ -11,6 +11,7 @@ from typing import Any, Callable, List, Optional, Tuple, Union
 from collections.abc import Sequence
 from torch import Tensor
 IndexType = Union[slice, Tensor, np.ndarray, Sequence]
+import random
 
 
 import torch
@@ -258,6 +259,108 @@ class PCQM4MV2_Dihedral(PCQM4MV2_XYZ):
         org_data.pos = torch.tensor(pos_noise_coords)
         
         return org_data
+
+
+
+class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
+    def __init__(self, root: str, sdf_path: str, dihedral_angle_noise_scale: float, position_noise_scale: float, composition: bool, transform: Optional[Callable] = None,
+                 pre_transform: Optional[Callable] = None,
+                 pre_filter: Optional[Callable] = None, dataset_arg: Optional[str] = None):
+        assert dataset_arg is None, "PCQM4MV2_Dihedral does not take any dataset args."
+        super().__init__(root, transform, pre_transform, pre_filter)
+        # self.suppl = Chem.SDMolSupplier(sdf_path)
+        self.dihedral_angle_noise_scale = dihedral_angle_noise_scale
+        self.position_noise_scale = position_noise_scale
+        self.composition = composition # angle noise as the start
+
+        self.random_pos_prb = 0.5
+        global MOL_LST
+        if MOL_LST is None:
+            # import pickle
+            # with open(sdf_path, 'rb') as handle:
+            #     MOL_LST = pickle.load(handle)
+            # MOL_LST = np.load("mol_iter_all.npy", allow_pickle=True)
+            MOL_LST = np.load("h_mol_lst.npy", allow_pickle=True)
+            
+        if debug:
+            global MOL_DEBUG_LST
+            if MOL_DEBUG_LST is None:
+                # MOL_DEBUG_LST = Chem.SDMolSupplier("pcqm4m-v2-train.sdf")
+                MOL_DEBUG_LST = np.load("mol_iter_all.npy", allow_pickle=True)
+    
+    def transform_noise(self, data, position_noise_scale):
+        noise = torch.randn_like(torch.tensor(data)) * position_noise_scale
+        data_noise = data + noise.numpy()
+        return data_noise
+
+    def __getitem__(self, idx: Union[int, np.integer, IndexType]) -> Union['Dataset', Data]:
+        org_data = super().__getitem__(idx)
+        org_atom_num = org_data.pos.shape[0]
+        # change org_data coordinate
+        # get mol
+        mol = MOL_LST[idx.item()]
+        atom_num = mol.GetNumAtoms()
+
+        # get rotate bond
+        rotable_bonds = get_torsions([mol])
+
+        # prob = random.random()
+        if atom_num != org_atom_num or len(rotable_bonds) == 0: # or prob < self.random_pos_prb:
+            pos_noise_coords = self.transform_noise(org_data.pos, self.position_noise_scale)
+            org_data.pos_target = torch.tensor(pos_noise_coords - org_data.pos.numpy())
+            org_data.pos = torch.tensor(pos_noise_coords)
+        
+            return org_data
+
+        # else angel random
+
+        # if len(rotable_bonds):
+        org_angle = []
+        for rot_bond in rotable_bonds:
+            org_angle.append(GetDihedral(mol.GetConformer(), rot_bond))
+        org_angle = np.array(org_angle)        
+        noise_angle = self.transform_noise(org_angle, self.dihedral_angle_noise_scale)
+        new_mol = apply_changes(mol, noise_angle, rotable_bonds)
+        
+        coord_conf = new_mol.GetConformer()
+        pos_noise_coords_angle = np.zeros((atom_num, 3), dtype=np.float32)
+        # pos_noise_coords = new_mol.GetConformer().GetPositions()
+        for idx in range(atom_num):
+            c_pos = coord_conf.GetAtomPosition(idx)
+            pos_noise_coords_angle[idx] = [float(c_pos.x), float(c_pos.y), float(c_pos.z)]
+
+        # coords = np.zeros((atom_num, 3), dtype=np.float32)
+        # coord_conf = mol.GetConformer()
+        # for idx in range(atom_num):
+        #     c_pos = coord_conf.GetAtomPosition(idx)
+        #     coords[idx] = [float(c_pos.x), float(c_pos.y), float(c_pos.z)]
+        # coords = mol.GetConformer().GetPositions()
+
+        pos_noise_coords = self.transform_noise(pos_noise_coords_angle, self.position_noise_scale)
+        
+        
+        # if self.composition or not len(rotable_bonds):
+        #     pos_noise_coords = self.transform_noise(coords, self.position_noise_scale)
+        #     if len(rotable_bonds): # set coords into the mol
+        #         conf = mol.GetConformer()
+        #         for i in range(mol.GetNumAtoms()):
+        #             x,y,z = pos_noise_coords[i]
+        #             conf.SetAtomPosition(i, Point3D(float(x), float(y), float(z)))
+        
+
+        
+
+        
+        # org_data.pos_target = torch.tensor(pos_noise_coords - org_data.pos.numpy())
+        if self.composition:
+            org_data.pos_target = torch.tensor(pos_noise_coords - pos_noise_coords_angle)
+            org_data.pos = torch.tensor(pos_noise_coords)
+        else:
+            org_data.pos_target = torch.tensor(pos_noise_coords - org_data.pos.numpy())
+            org_data.pos = torch.tensor(pos_noise_coords)
+        
+        return org_data
+
 
 
 class PCQM4MV2_3D:

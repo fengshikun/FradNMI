@@ -142,9 +142,13 @@ class LNNP(LightningModule):
             if "y" not in batch:
                 # "use" both outputs of the model's forward (see comment above).
                 noise_pred = noise_pred + pred.sum() * 0
-                
-            normalized_pos_target = self.model.pos_normalizer(batch.pos_target)
-            loss_pos = loss_fn(noise_pred, normalized_pos_target)
+            
+            if self.model.pos_normalizer is not None:
+                normalized_pos_target = self.model.pos_normalizer(batch.pos_target)
+                loss_pos = loss_fn(noise_pred, normalized_pos_target)
+            else:
+                loss_pos = loss_fn(noise_pred, batch.pos_target)
+            # loss_pos = loss_fn(noise_pred, normalized_pos_target)
             self.losses[stage + "_pos"].append(loss_pos.detach())
 
         # total loss

@@ -101,6 +101,7 @@ def create_model(args, prior_model=None, mean=None, std=None):
         derivative=args["derivative"],
         output_model_noise=output_model_noise,
         position_noise_scale=args['position_noise_scale'],
+        no_target_mean=args['no_target_mean'],
     )
     return model
 
@@ -147,6 +148,7 @@ class TorchMD_Net(nn.Module):
         derivative=False,
         output_model_noise=None,
         position_noise_scale=0.,
+        no_target_mean=False,
     ):
         super(TorchMD_Net, self).__init__()
         self.representation_model = representation_model
@@ -166,14 +168,17 @@ class TorchMD_Net(nn.Module):
         self.derivative = derivative
         self.output_model_noise = output_model_noise        
         self.position_noise_scale = position_noise_scale
+        self.no_target_mean = no_target_mean
 
         mean = torch.scalar_tensor(0) if mean is None else mean
         self.register_buffer("mean", mean)
         std = torch.scalar_tensor(1) if std is None else std
         self.register_buffer("std", std)
 
-        if self.position_noise_scale > 0:
+        if self.position_noise_scale > 0 and not self.no_target_mean:
             self.pos_normalizer = AccumulatedNormalization(accumulator_shape=(3,))
+        else:
+            self.pos_normalizer = None
 
         self.reset_parameters()
 
