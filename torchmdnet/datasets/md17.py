@@ -14,7 +14,7 @@ class MD17(InMemoryDataset):
 
     molecule_files = dict(
         aspirin="aspirin_dft.npz",
-        benzene="benzene_old_dft.npz",
+        benzene="benzene2017_dft.npz",
         ethanol="ethanol_dft.npz",
         malonaldehyde="malonaldehyde_dft.npz",
         naphthalene="naphthalene_dft.npz",

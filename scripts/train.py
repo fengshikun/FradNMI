@@ -77,6 +77,9 @@ def get_args():
     parser.add_argument('--sdf-path', default=None, type=str, help='sdf path')
     parser.add_argument('--violate', type=bool, default=False, help='violate conformation rules or not.')
 
+    parser.add_argument('--md17', type=bool, default=False, help='is md17 test set.')
+    parser.add_argument('--seperate-noise', type=bool, default=False, help='seperate noise.')
+
 
     parser.add_argument('--dihedral-angle-noise-scale', default=0., type=float, help='Weighting factor for denoising in the loss function.')
     parser.add_argument('--composition', type=bool, default=False, help='violate conformation rules or not.')

@@ -8,6 +8,9 @@ import copy
 from tqdm import tqdm
 import pickle
 
+
+from torsion_utils import get_torsions, GetDihedral, apply_changes
+
 pcqm_root_dir = '/sharefs/sharefs-skfeng/Denoising/data/pcq'
 position_noise_scale = 0.06 # from examples/ET-PCQM4MV2.yaml
 sample_num = 100
@@ -68,6 +71,40 @@ def get_geometry_graph_ring(lig, only_atom_ring=False, return_coords=False):
         return edges_src, edges_dst, feat
     # return {'edges_src': edges_src, 'edges_dst': edges_dst, 'feat': feat}
     # return graph
+
+
+# statistic the coordinate loss caused by coord noise
+def noise_loss(mol, coord_var=0.04, angle_var_lst=[1, 2, 3, 4, 8, 10, 20, 50, 80, 100]):
+    coords = mol.GetConformer().GetPositions()
+    noise_coords = transform(coords, coord_var)
+    coord_mean_error = np.mean(np.abs(noise_coords - coords))
+    
+    noise_coords = transform(coords, coord_var * 10)
+    coord_mean_error2 = np.mean(np.abs(noise_coords - coords))
+    
+    rotable_bonds = get_torsions([mol])
+    if not len(rotable_bonds):
+        return None
+
+    org_angle = []
+    for rot_bond in rotable_bonds:
+        org_angle.append(GetDihedral(mol.GetConformer(), rot_bond))
+    org_angle = np.array(org_angle)
+
+    angle_mean_error_lst = [coord_mean_error, coord_mean_error2]
+    angle_mean = []
+    for ang_var in angle_var_lst:
+        noise_angle = transform(org_angle, ang_var)
+        new_mol = apply_changes(mol, noise_angle, rotable_bonds)
+        new_coords = new_mol.GetConformer().GetPositions()
+        angle_mean_error_lst.append(np.mean(np.abs(new_coords - coords)))
+        angle_mean.append(np.mean(np.abs(noise_angle - org_angle)))
+    
+    return angle_mean_error_lst, angle_mean
+
+    
+    
+
 
 
 # return min loss, max loss, diff
@@ -181,6 +218,35 @@ def draw_dist(dist_numpy, save_prefix='', delima=0.01):
     plt.xlabel('value')
     plt.ylabel('number')
     plt.savefig(f'{save_prefix}.png')
+
+
+
+h_suppl = np.load("h_mol_lst.npy", allow_pickle=True)
+
+s_cnt = 0
+all_cnt = 0
+err_lst = []
+err_ang = []
+# for mol in tqdm(suppl):
+for mol in tqdm(h_suppl):
+    err = noise_loss(mol)
+    all_cnt += 1
+    if err is None: # pass
+        continue
+    err_ang.append(err[1])
+    err_lst.append(err[0])
+    s_cnt += 1
+    # if all_cnt > 1000000:
+    #     break
+
+err_lst = np.array(err_lst)
+err_ang = np.array(err_ang)
+np.save('err_lst_all_atom.npy', err_lst)
+np.save('err_ang_all_atom.npy', err_ang)
+exit(0)
+
+
+
 
 
 # coordinate 

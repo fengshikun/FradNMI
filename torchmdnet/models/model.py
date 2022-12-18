@@ -53,6 +53,8 @@ def create_model(args, prior_model=None, mean=None, std=None):
             num_heads=args["num_heads"],
             distance_influence=args["distance_influence"],
             layernorm_on_vec=args["layernorm_on_vec"],
+            md17=args["md17"],
+            seperate_noise=args['seperate_noise'],
             **shared_args,
         )
     else:
@@ -102,6 +104,7 @@ def create_model(args, prior_model=None, mean=None, std=None):
         output_model_noise=output_model_noise,
         position_noise_scale=args['position_noise_scale'],
         no_target_mean=args['no_target_mean'],
+        seperate_noise=args['seperate_noise'],
     )
     return model
 
@@ -123,7 +126,8 @@ def load_model(filepath, args=None, device="cpu", mean=None, std=None, **kwargs)
     
     if len(loading_return.unexpected_keys) > 0:
         # Should only happen if not applying denoising during fine-tuning.
-        assert all(("output_model_noise" in k or "pos_normalizer" in k) for k in loading_return.unexpected_keys)
+        # assert all(("output_model_noise" in k or "pos_normalizer" in k) for k in loading_return.unexpected_keys)
+        pass
     # assert len(loading_return.missing_keys) == 0, f"Missing keys: {loading_return.missing_keys}"
     if len(loading_return.missing_keys) > 0:
         print(f'warning:  load model missing keys {loading_return.missing_keys}')
@@ -149,6 +153,7 @@ class TorchMD_Net(nn.Module):
         output_model_noise=None,
         position_noise_scale=0.,
         no_target_mean=False,
+        seperate_noise=False,
     ):
         super(TorchMD_Net, self).__init__()
         self.representation_model = representation_model
@@ -169,6 +174,7 @@ class TorchMD_Net(nn.Module):
         self.output_model_noise = output_model_noise        
         self.position_noise_scale = position_noise_scale
         self.no_target_mean = no_target_mean
+        self.seperate_noise = seperate_noise
 
         mean = torch.scalar_tensor(0) if mean is None else mean
         self.register_buffer("mean", mean)
@@ -195,13 +201,20 @@ class TorchMD_Net(nn.Module):
         if self.derivative:
             pos.requires_grad_(True)
 
-        # run the potentially wrapped representation model
-        x, v, z, pos, batch = self.representation_model(z, pos, batch=batch)
+        if self.seperate_noise:
+            x, v, nv, z, pos, batch = self.representation_model(z, pos, batch=batch)
+        else:
+            # run the potentially wrapped representation model
+            x, v, z, pos, batch = self.representation_model(z, pos, batch=batch)
+            nv = None
 
         # predict noise
         noise_pred = None
         if self.output_model_noise is not None:
-            noise_pred = self.output_model_noise.pre_reduce(x, v, z, pos, batch) 
+            if nv is not None:
+                noise_pred = self.output_model_noise.pre_reduce(x, nv, z, pos, batch)
+            else:
+                noise_pred = self.output_model_noise.pre_reduce(x, v, z, pos, batch)
 
         # apply the output network
         x = self.output_model.pre_reduce(x, v, z, pos, batch)

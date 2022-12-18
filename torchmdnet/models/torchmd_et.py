@@ -69,6 +69,8 @@ class TorchMD_ET(nn.Module):
         max_z=100,
         max_num_neighbors=32,
         layernorm_on_vec=None,
+        md17=False,
+        seperate_noise=False,
     ):
         super(TorchMD_ET, self).__init__()
 
@@ -124,7 +126,10 @@ class TorchMD_ET(nn.Module):
         )
 
         self.attention_layers = nn.ModuleList()
-        self.vec_norms = nn.ModuleList()
+
+        self.md17 = md17
+        if not self.md17:
+            self.vec_norms = nn.ModuleList()
         for _ in range(num_layers):
             layer = EquivariantMultiHeadAttention(
                 hidden_channels,
@@ -137,10 +142,19 @@ class TorchMD_ET(nn.Module):
                 cutoff_upper,
             ).jittable()
             self.attention_layers.append(layer)
-            self.vec_norms.append(EquivariantLayerNorm(hidden_channels))
+            if not self.md17:
+                self.vec_norms.append(EquivariantLayerNorm(hidden_channels))
 
         self.out_norm = nn.LayerNorm(hidden_channels)
-        self.x_norm = nn.LayerNorm(hidden_channels, elementwise_affine=False)
+
+        self.seperate_noise = seperate_noise
+        if self.seperate_noise:
+            assert not self.layernorm_on_vec
+            self.out_norm_vec = EquivariantLayerNorm(hidden_channels)
+
+
+        if not self.md17:
+            self.x_norm = nn.LayerNorm(hidden_channels, elementwise_affine=False)
         if self.layernorm_on_vec:
             if self.layernorm_on_vec == "whitened":
                 self.out_norm_vec = EquivariantLayerNorm(hidden_channels)
@@ -181,9 +195,11 @@ class TorchMD_ET(nn.Module):
         for lidx, attn in enumerate(self.attention_layers):
             dx, dvec = attn(x, vec, edge_index, edge_weight, edge_attr, edge_vec)
             x = x + dx # may be nan
-            x = self.x_norm(x)
+            if not self.md17:
+                x = self.x_norm(x)
             vec = vec + dvec
-            vec = self.vec_norms[lidx](vec)
+            if not self.md17:
+                vec = self.vec_norms[lidx](vec)
         if torch.isnan(x).sum():
             print('nan happens1111')
         # x = torch.clip(x, min=-1e+7, max=1e+7)
@@ -192,6 +208,9 @@ class TorchMD_ET(nn.Module):
             import pdb; pdb.set_trace()# print('nan happens2222')
         if self.layernorm_on_vec:
             vec = self.out_norm_vec(vec)
+        if self.seperate_noise:
+            nvec = self.out_norm_vec(vec)
+            return xnew, vec, nvec, z, pos, batch
 
         return xnew, vec, z, pos, batch
 

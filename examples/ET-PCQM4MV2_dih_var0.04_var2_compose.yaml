@@ -6,7 +6,7 @@ batch_size: 70
 coord_files: null
 cutoff_lower: 0.0
 cutoff_upper: 5.0
-dataset: PCQM4MV2
+dataset: PCQM4MV2_Dihedral
 dataset_arg: null
 dataset_root: /sharefs/sharefs-skfeng/Denoising/data/pcq
 derivative: false
@@ -37,7 +37,7 @@ model: equivariant-transformer
 neighbor_embedding: true
 ngpus: -1
 num_epochs: 30
-num_steps: 400000
+num_steps: 800000
 num_heads: 8
 num_layers: 8
 num_nodes: 1
@@ -60,6 +60,10 @@ val_size: 100
 weight_decay: 0.0
 output_model_noise: VectorOutput
 position_noise_scale: 0.04
+dihedral_angle_noise_scale: 2
+composition: true
+sdf_path: 'mol_iter_all.pickle'
+
 denoising_weight: 1.0
 denoising_only: true
 layernorm_on_vec: null

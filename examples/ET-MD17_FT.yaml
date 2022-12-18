@@ -56,3 +56,10 @@ trainable_rbf: false
 val_size: 50
 weight_decay: 0.0
 md17: true
+seperate_noise: true
+output_model_noise: VectorOutput
+position_noise_scale: 0.005
+denoising_weight: 0.1
+layernorm_on_vec: null
+wandb_notes: ""
+job_id: auto

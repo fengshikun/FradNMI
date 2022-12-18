@@ -16,7 +16,7 @@ early_stopping_patience: 150
 ema_alpha_dy: 1.0
 ema_alpha_y: 1.0
 embed_files: null
-embedding_dimension: 256
+embedding_dimension: 128
 energy_files: null
 energy_weight: 0.0
 force_files: null
@@ -39,9 +39,9 @@ ngpus: -1
 num_epochs: 30
 num_steps: 400000
 num_heads: 8
-num_layers: 8
+num_layers: 6
 num_nodes: 1
-num_rbf: 64
+num_rbf: 32
 num_workers: 6
 output_model: Scalar
 precision: 32
@@ -65,3 +65,4 @@ denoising_only: true
 layernorm_on_vec: null
 wandb_notes: ""
 job_id: auto
+md17: true

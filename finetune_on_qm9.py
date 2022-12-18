@@ -10,6 +10,9 @@ import argparse
 qm9_task = {'dipole_moment': 0, 'isotropic_polarizability': 1, 'homo': 2, 'lumo': 3, 'gap': 4, 'electronic_spatial_extent': 5, 'zpve': 6, 'energy_U0': 7, 'energy_U': 8, 'enthalpy_H': 9, 'free_energy': 10, 'heat_capacity': 11}
 
 
+# qm9_task = {'homo': 2, 'gap': 4}
+qm9_task = {'lumo': 3}
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch implementation of pre-training of graph neural networks')

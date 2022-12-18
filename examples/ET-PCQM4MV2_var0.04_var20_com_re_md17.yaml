@@ -6,7 +6,7 @@ batch_size: 70
 coord_files: null
 cutoff_lower: 0.0
 cutoff_upper: 5.0
-dataset: PCQM4MV2
+dataset: PCQM4MV2_Dihedral2
 dataset_arg: null
 dataset_root: /sharefs/sharefs-skfeng/Denoising/data/pcq
 derivative: false
@@ -16,7 +16,7 @@ early_stopping_patience: 150
 ema_alpha_dy: 1.0
 ema_alpha_y: 1.0
 embed_files: null
-embedding_dimension: 256
+embedding_dimension: 128
 energy_files: null
 energy_weight: 0.0
 force_files: null
@@ -39,9 +39,9 @@ ngpus: -1
 num_epochs: 30
 num_steps: 400000
 num_heads: 8
-num_layers: 8
+num_layers: 6
 num_nodes: 1
-num_rbf: 64
+num_rbf: 32
 num_workers: 6
 output_model: Scalar
 precision: 32
@@ -60,8 +60,12 @@ val_size: 100
 weight_decay: 0.0
 output_model_noise: VectorOutput
 position_noise_scale: 0.04
+dihedral_angle_noise_scale: 20
+composition: true
+no_target_mean: false
 denoising_weight: 1.0
 denoising_only: true
 layernorm_on_vec: null
 wandb_notes: ""
 job_id: auto
+md17: true

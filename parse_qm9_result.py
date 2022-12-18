@@ -3,9 +3,12 @@ import argparse
 import re
 import glob
 
-task_dict = {'dipole_moment': 0, 'isotropic_polarizability': 1, 'homo': 2, 'lumo': 3, 'gap': 4, 'electronic_spatial_extent': 5, 'zpve': 6,  'energy_U0': 7, 'energy_U': 8, 'enthalpy_H': 9, 'free_energy': 10, 'heat_capacity': 11} # 
+task_dict = {'dipole_moment': 0, 'isotropic_polarizability': 1, 'homo': 2, 'lumo': 3, 'gap': 4, 'electronic_spatial_extent': 5, 'zpve': 6,  'energy_U0': 7, 'energy_U': 8, 'enthalpy_H': 9, 'free_energy': 10, 'heat_capacity': 11} #
+
+
 
 exp_dir_prefix = '/home/AI4Science/fengsk/Pretraining-Denoising/experiments/'
+exp_dir_prefix = '/sharefs/sharefs-skfeng/pre-training-via-denoising/experiments/'
 
 
 if __name__ == "__main__":
@@ -18,6 +21,9 @@ if __name__ == "__main__":
     for task in task_dict:
         log_file = f'{job_prefix}_qm9_{task}_finetuning.log'
         exp_dir = f'{exp_dir_prefix}{job_prefix}_qm9_{task}_finetuning'
+        if not os.path.exists(log_file):
+            print(f'task {log_file} not found')
+            continue
         with open(log_file, 'r') as lr:
             ckpt_file = glob.glob(f'{exp_dir}/*.ckpt')
             if not len(ckpt_file):
