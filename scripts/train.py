@@ -20,6 +20,8 @@ from torchmdnet.utils import LoadFromFile, LoadFromCheckpoint, save_argparse, nu
 from pathlib import Path
 import wandb
 
+
+wandb.login(key='a46eaf1ea4fdcf3a2a93022568aa1c730c208b50')
 def get_args():
     # fmt: off
     parser = argparse.ArgumentParser(description='Training')
@@ -83,6 +85,8 @@ def get_args():
 
     parser.add_argument('--dihedral-angle-noise-scale', default=0., type=float, help='Weighting factor for denoising in the loss function.')
     parser.add_argument('--composition', type=bool, default=False, help='violate conformation rules or not.')
+    parser.add_argument('--decay', type=bool, default=False, help='violate conformation rules or not.')
+    parser.add_argument('--decay_coe', type=float, default=0.2, help='violate conformation rules or not.')
 
     parser.add_argument('--no-target-mean', type=bool, default=False, help='violate conformation rules or not.')
 
@@ -202,7 +206,8 @@ def main():
         max_steps=args.num_steps,
         gpus=args.ngpus,
         num_nodes=args.num_nodes,
-        accelerator=args.distributed_backend,
+        # accelerator=args.distributed_backend,
+        accelerator='gpu',
         default_root_dir=args.log_dir,
         auto_lr_find=False,
         resume_from_checkpoint=args.load_model,
@@ -210,7 +215,7 @@ def main():
         logger=[tb_logger, csv_logger, wandb_logger],
         reload_dataloaders_every_epoch=False,
         precision=args.precision,
-        plugins=[ddp_plugin],
+        # plugins=[ddp_plugin],
     )
 
     trainer.fit(model, data)

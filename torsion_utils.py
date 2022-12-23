@@ -117,7 +117,7 @@ def get_rotate_order_info(mol, rotate_bonds):
 
     for idx, rb in enumerate(cut_bonds_set):
         rg_edge = []
-        print('rb is {}'.format(rb))
+        # print('rb is {}'.format(rb))
         for key in rg_nodes:
             if rb[0] in rg_nodes[key]:
                 rg_edge.append(key)
@@ -127,7 +127,7 @@ def get_rotate_order_info(mol, rotate_bonds):
                 edge_rotate_bond_dict[str(rg_edge)] = idx
                 edge_rotate_bond_dict[str([rg_edge[1], rg_edge[0]])] = idx
                 break
-        print(rg_edge)
+        # print(rg_edge)
         rg_graph[rg_edge[0]].append(rg_edge[1])
         rg_graph[rg_edge[1]].append(rg_edge[0])
 
@@ -158,7 +158,7 @@ def get_rotate_order_info(mol, rotate_bonds):
 
                 
                     #vetext--> node , check the rotate_bond reverse or not
-                    if rotate_bond[0] not in rg_nodes[vertex]: # reverse
+                    if rotate_bond[0] not in rg_nodes[vertex] and rotate_bond[1] not in rg_nodes[vertex]: # reverse
                         rotate_bond.reverse()
                     
                     rotable_bonds_order_lst.append(rotate_bond)
@@ -169,7 +169,7 @@ def get_rotate_order_info(mol, rotate_bonds):
     return bfs(rg_graph, root_idx, edge_rotate_bond_dict, rotate_bonds, rg_nodes)
 
 if __name__ == "__main__":
-    mol = Chem.SDMolSupplier('org_4.sdf')[0]
+    mol = Chem.SDMolSupplier('org_2.sdf')[0]
     rotate_bonds = get_torsions([mol])
     print(rotate_bonds)
     print(get_rotate_order_info(mol, rotate_bonds))

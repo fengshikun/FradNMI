@@ -18,7 +18,7 @@ import torch
 from torch_geometric.data import (InMemoryDataset, download_url, extract_zip,
                                   Data)
 
-from torsion_utils import get_torsions, GetDihedral, apply_changes
+from torsion_utils import get_torsions, GetDihedral, apply_changes, get_rotate_order_info
 from rdkit.Geometry import Point3D
 
 
@@ -72,7 +72,7 @@ class PCQM4MV2_XYZ(InMemoryDataset):
 # Globle variable
 MOL_LST = None
 MOL_DEBUG_LST = None
-debug = True
+debug = False
 debug_cnt = 0
 class PCQM4MV2_XYZ_BIAS(PCQM4MV2_XYZ):
     #  sdf path: pcqm4m-v2-train.sdf
@@ -263,7 +263,7 @@ class PCQM4MV2_Dihedral(PCQM4MV2_XYZ):
 
 
 class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
-    def __init__(self, root: str, sdf_path: str, dihedral_angle_noise_scale: float, position_noise_scale: float, composition: bool, transform: Optional[Callable] = None,
+    def __init__(self, root: str, sdf_path: str, dihedral_angle_noise_scale: float, position_noise_scale: float, composition: bool, decay=False, decay_coe=0.2, transform: Optional[Callable] = None,
                  pre_transform: Optional[Callable] = None,
                  pre_filter: Optional[Callable] = None, dataset_arg: Optional[str] = None):
         assert dataset_arg is None, "PCQM4MV2_Dihedral does not take any dataset args."
@@ -272,6 +272,9 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
         self.dihedral_angle_noise_scale = dihedral_angle_noise_scale
         self.position_noise_scale = position_noise_scale
         self.composition = composition # angle noise as the start
+
+        self.decay = decay
+        self.decay_coe = decay_coe
 
         self.random_pos_prb = 0.5
         global MOL_LST
@@ -292,6 +295,11 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
         noise = torch.randn_like(torch.tensor(data)) * position_noise_scale
         data_noise = data + noise.numpy()
         return data_noise
+    
+    def transform_noise_decay(self, data, position_noise_scale, decay_coe_lst):
+        noise = torch.randn_like(torch.tensor(data)) * position_noise_scale * torch.tensor(decay_coe_lst)
+        data_noise = data + noise.numpy()
+        return data_noise
 
     def __getitem__(self, idx: Union[int, np.integer, IndexType]) -> Union['Dataset', Data]:
         org_data = super().__getitem__(idx)
@@ -302,7 +310,9 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
         atom_num = mol.GetNumAtoms()
 
         # get rotate bond
-        rotable_bonds = get_torsions([mol])
+        no_h_mol = Chem.RemoveHs(mol)
+        # rotable_bonds = get_torsions([mol])
+        rotable_bonds = get_torsions([no_h_mol])
 
         # prob = random.random()
         if atom_num != org_atom_num or len(rotable_bonds) == 0: # or prob < self.random_pos_prb:
@@ -313,14 +323,23 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
             return org_data
 
         # else angel random
-
         # if len(rotable_bonds):
         org_angle = []
-        for rot_bond in rotable_bonds:
-            org_angle.append(GetDihedral(mol.GetConformer(), rot_bond))
-        org_angle = np.array(org_angle)        
-        noise_angle = self.transform_noise(org_angle, self.dihedral_angle_noise_scale)
-        new_mol = apply_changes(mol, noise_angle, rotable_bonds)
+        if self.decay:
+            rotate_bonds_order, rb_depth = get_rotate_order_info(mol, rotable_bonds)
+            decay_coe_lst = []
+            for i, rot_bond in enumerate(rotate_bonds_order):
+                org_angle.append(GetDihedral(mol.GetConformer(), rot_bond))
+                decay_scale = (self.decay_coe) ** (rb_depth[i] - 1)    
+                decay_coe_lst.append(self.dihedral_angle_noise_scale*decay_scale)
+            noise_angle = self.transform_noise_decay(org_angle, self.dihedral_angle_noise_scale, decay_coe_lst)
+            new_mol = apply_changes(mol, noise_angle, rotate_bonds_order)
+        else:
+            for rot_bond in rotable_bonds:
+                org_angle.append(GetDihedral(mol.GetConformer(), rot_bond))
+            org_angle = np.array(org_angle)        
+            noise_angle = self.transform_noise(org_angle, self.dihedral_angle_noise_scale)
+            new_mol = apply_changes(mol, noise_angle, rotable_bonds)
         
         coord_conf = new_mol.GetConformer()
         pos_noise_coords_angle = np.zeros((atom_num, 3), dtype=np.float32)
