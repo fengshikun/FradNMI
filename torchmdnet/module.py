@@ -27,6 +27,9 @@ class LNNP(LightningModule):
         self.losses = None
         self._reset_losses_dict()
 
+        # seperate noisy node and finetune target
+        self.sep_noisy_node = self.hparams.sep_noisy_node
+
     def configure_optimizers(self):
         optimizer = AdamW(
             self.model.parameters(),
@@ -78,7 +81,14 @@ class LNNP(LightningModule):
         with torch.set_grad_enabled(stage == "train" or self.hparams.derivative):
             # TODO: the model doesn't necessarily need to return a derivative once
             # Union typing works under TorchScript (https://github.com/pytorch/pytorch/pull/53180)
-            pred, noise_pred, deriv = self(batch.z, batch.pos, batch.batch)
+            if stage == 'test' and 'org_pos' in batch.keys:
+                pred, noise_pred, deriv = self(batch.z, batch.org_pos, batch.batch) # use the org pos
+            else:
+                if self.sep_noisy_node:
+                    pred, _, deriv = self(batch.z, batch.org_pos, batch.batch)
+                    _, noise_pred, _ = self(batch.z, batch.pos, batch.batch)
+                else:
+                    pred, noise_pred, deriv = self(batch.z, batch.pos, batch.batch)
 
         denoising_is_on = ("pos_target" in batch) and (self.hparams.denoising_weight > 0) and (noise_pred is not None)
 
@@ -143,11 +153,26 @@ class LNNP(LightningModule):
                 # "use" both outputs of the model's forward (see comment above).
                 noise_pred = noise_pred + pred.sum() * 0
             
+            def weighted_mse_loss(input, target, weight):
+                return (weight.reshape(-1, 1).repeat((1, 3)) * (input - target) ** 2).mean()
+            def mse_loss(input, target):
+                return ((input - target) ** 2).mean()
+
+            if 'wg' in batch.keys:
+                loss_fn = weighted_mse_loss
+                wt = batch['w1'].sum() / batch['idx'].shape[0]
+                weights = batch['wg'] / wt
             if self.model.pos_normalizer is not None:
                 normalized_pos_target = self.model.pos_normalizer(batch.pos_target)
-                loss_pos = loss_fn(noise_pred, normalized_pos_target)
+                if 'wg'in batch.keys:
+                    loss_pos = loss_fn(noise_pred, normalized_pos_target, weights)
+                else:
+                    loss_pos = loss_fn(noise_pred, normalized_pos_target)
             else:
-                loss_pos = loss_fn(noise_pred, batch.pos_target)
+                if 'wg'in batch.keys:
+                    loss_pos = loss_fn(noise_pred, normalized_pos_target, weights)
+                else:
+                    loss_pos = loss_fn(noise_pred, normalized_pos_target)
             # loss_pos = loss_fn(noise_pred, normalized_pos_target)
             self.losses[stage + "_pos"].append(loss_pos.detach())
 

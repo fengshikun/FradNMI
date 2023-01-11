@@ -12,6 +12,8 @@ from collections.abc import Sequence
 from torch import Tensor
 IndexType = Union[slice, Tensor, np.ndarray, Sequence]
 import random
+import torch.nn.functional as F
+import copy
 
 
 import torch
@@ -191,8 +193,8 @@ class PCQM4MV2_Dihedral(PCQM4MV2_XYZ):
             # with open(sdf_path, 'rb') as handle:
             #     MOL_LST = pickle.load(handle)
             # MOL_LST = np.load("mol_iter_all.npy", allow_pickle=True)
-            MOL_LST = np.load("h_mol_lst.npy", allow_pickle=True)
-            
+                MOL_LST = np.load("h_mol_lst.npy", allow_pickle=True)
+
         if debug:
             global MOL_DEBUG_LST
             if MOL_DEBUG_LST is None:
@@ -261,11 +263,14 @@ class PCQM4MV2_Dihedral(PCQM4MV2_XYZ):
         return org_data
 
 
+# equilibrium
+EQ_MOL_LST = None
+EQ_EN_LST = None
 
 class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
     def __init__(self, root: str, sdf_path: str, dihedral_angle_noise_scale: float, position_noise_scale: float, composition: bool, decay=False, decay_coe=0.2, transform: Optional[Callable] = None,
                  pre_transform: Optional[Callable] = None,
-                 pre_filter: Optional[Callable] = None, dataset_arg: Optional[str] = None):
+                 pre_filter: Optional[Callable] = None, dataset_arg: Optional[str] = None, equilibrium=False, eq_weight=False, cod_denoise=False):
         assert dataset_arg is None, "PCQM4MV2_Dihedral does not take any dataset args."
         super().__init__(root, transform, pre_transform, pre_filter)
         # self.suppl = Chem.SDMolSupplier(sdf_path)
@@ -277,13 +282,24 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
         self.decay_coe = decay_coe
 
         self.random_pos_prb = 0.5
+        self.equilibrium = equilibrium # equilibrium settings
+        self.eq_weight = eq_weight
+        self.cod_denoise = cod_denoise # reverse to coordinate denoise
+        
         global MOL_LST
-        if MOL_LST is None:
+        global EQ_MOL_LST
+        global EQ_EN_LST
+        if self.equilibrium and EQ_MOL_LST is None:
+            # debug
+            EQ_MOL_LST = np.load('MG_MOL_All.npy', allow_pickle=True) # mol lst
+            EQ_EN_LST = np.load('MG_All.npy', allow_pickle=True) # energy lst
+        else:
+            if MOL_LST is None:
             # import pickle
             # with open(sdf_path, 'rb') as handle:
             #     MOL_LST = pickle.load(handle)
             # MOL_LST = np.load("mol_iter_all.npy", allow_pickle=True)
-            MOL_LST = np.load("h_mol_lst.npy", allow_pickle=True)
+                MOL_LST = np.load("h_mol_lst.npy", allow_pickle=True)
             
         if debug:
             global MOL_DEBUG_LST
@@ -306,7 +322,42 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
         org_atom_num = org_data.pos.shape[0]
         # change org_data coordinate
         # get mol
-        mol = MOL_LST[idx.item()]
+
+        if self.equilibrium:
+            # for debug
+            # max_len = 422325 - 1
+            # idx = idx.item() % max_len
+            idx = idx.item()
+            mol = copy.copy(EQ_MOL_LST[idx])
+            energy_lst = EQ_EN_LST[idx]
+            eq_confs = len(energy_lst)
+            conf_num = mol.GetNumConformers()
+            assert conf_num == (eq_confs + 1)
+            if eq_confs:
+                weights = F.softmax(-torch.tensor(energy_lst))
+                # random pick one
+                pick_lst = [idx for idx in range(conf_num)]
+                p_idx = random.choice(pick_lst)
+                
+                for conf_id in range(conf_num):
+                    if conf_id != p_idx:
+                        mol.RemoveConformer(conf_id)
+                # only left p_idx
+                if p_idx == 0:
+                    weight = 1
+                else:
+                    if self.eq_weight:
+                        weight = 1
+                    else:
+                        weight = weights[p_idx - 1].item()
+                        
+            else:
+                weight = 1
+            
+        else:
+            mol = MOL_LST[idx.item()]
+
+
         atom_num = mol.GetNumAtoms()
 
         # get rotate bond
@@ -315,11 +366,15 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
         rotable_bonds = get_torsions([no_h_mol])
 
         # prob = random.random()
-        if atom_num != org_atom_num or len(rotable_bonds) == 0: # or prob < self.random_pos_prb:
+        if atom_num != org_atom_num or len(rotable_bonds) == 0 or self.cod_denoise: # or prob < self.random_pos_prb:
             pos_noise_coords = self.transform_noise(org_data.pos, self.position_noise_scale)
             org_data.pos_target = torch.tensor(pos_noise_coords - org_data.pos.numpy())
             org_data.pos = torch.tensor(pos_noise_coords)
-        
+
+            
+            if self.equilibrium:
+                org_data.w1 = weight
+                org_data.wg = torch.tensor([weight for _ in range(org_atom_num)], dtype=torch.float32)
             return org_data
 
         # else angel random
@@ -378,6 +433,10 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
             org_data.pos_target = torch.tensor(pos_noise_coords - org_data.pos.numpy())
             org_data.pos = torch.tensor(pos_noise_coords)
         
+        if self.equilibrium:
+            org_data.w1 = weight
+            org_data.wg = torch.tensor([weight for _ in range(atom_num)], dtype=torch.float32)
+
         return org_data
 
 

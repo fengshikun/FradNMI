@@ -85,10 +85,19 @@ def get_args():
 
     parser.add_argument('--dihedral-angle-noise-scale', default=0., type=float, help='Weighting factor for denoising in the loss function.')
     parser.add_argument('--composition', type=bool, default=False, help='violate conformation rules or not.')
+
+    parser.add_argument('--equilibrium', type=bool, default=False, help='equilibrium.')
+    parser.add_argument('--eq_weight', type=bool, default=False, help='eq_weight.')
+    parser.add_argument('--cod_denoise', type=bool, default=False, help='cod_denoise.')
+
+    parser.add_argument('--reverse_half', type=bool, default=False, help='reverse_half.')
+
     parser.add_argument('--decay', type=bool, default=False, help='violate conformation rules or not.')
     parser.add_argument('--decay_coe', type=float, default=0.2, help='violate conformation rules or not.')
 
     parser.add_argument('--no-target-mean', type=bool, default=False, help='violate conformation rules or not.')
+    parser.add_argument('--sep-noisy-node', type=bool, default=False, help='sep noisy node')
+    #sep-noisy-node
 
     # model architecture
     parser.add_argument('--model', type=str, default='graph-network', choices=models.__all__, help='Which model to train')

@@ -29,7 +29,7 @@ class DataModule(LightningDataModule):
                     self.hparams["force_files"],
                 )
             else:
-                if self.hparams['position_noise_scale'] > 0. and 'BIAS' not in self.hparams['dataset'] and 'Dihedral' not in self.hparams['dataset']:
+                if self.hparams['position_noise_scale'] > 0. and 'BIAS' not in self.hparams['dataset'] and 'Dihedral' not in self.hparams['dataset'] and 'QM9A' not in self.hparams['dataset']:
                     def transform(data):
                         noise = torch.randn_like(data.pos) * self.hparams['position_noise_scale']
                         data.pos_target = noise
@@ -43,9 +43,18 @@ class DataModule(LightningDataModule):
                 if 'BIAS' in self.hparams['dataset']:
                     dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], self.hparams['sdf_path'], self.hparams['position_noise_scale'], self.hparams['sample_number'], self.hparams['violate'], dataset_arg=self.hparams["dataset_arg"], transform=t)
                 elif 'Dihedral2' in self.hparams['dataset']:
-                    dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], self.hparams['sdf_path'], self.hparams['dihedral_angle_noise_scale'], self.hparams['position_noise_scale'], self.hparams['composition'], self.hparams['decay'], self.hparams['decay_coe'], dataset_arg=self.hparams["dataset_arg"], transform=t)
+                    dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], self.hparams['sdf_path'], self.hparams['dihedral_angle_noise_scale'], self.hparams['position_noise_scale'], self.hparams['composition'], self.hparams['decay'], self.hparams['decay_coe'], dataset_arg=self.hparams["dataset_arg"], equilibrium=self.hparams['equilibrium'], eq_weight=self.hparams['eq_weight'], cod_denoise=self.hparams['cod_denoise'], transform=t)
                 elif 'Dihedral' in self.hparams['dataset']:
                     dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], self.hparams['sdf_path'], self.hparams['dihedral_angle_noise_scale'], self.hparams['position_noise_scale'], self.hparams['composition'], dataset_arg=self.hparams["dataset_arg"], transform=t)
+                elif 'QM9A' in self.hparams['dataset'] or 'MD17A' in self.hparams['dataset']:
+                    if 'QM9A' in self.hparams['dataset']:
+                        if self.hparams["prior_model"] == "Atomref":
+                            transform_y = self.get_energy_data
+                        else:
+                            transform_y = None
+                        dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"], transform=None, dihedral_angle_noise_scale=self.hparams['dihedral_angle_noise_scale'], position_noise_scale=self.hparams['position_noise_scale'], composition=self.hparams['composition'], transform_y=transform_y)
+                    else:
+                        dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"], transform=None, dihedral_angle_noise_scale=self.hparams['dihedral_angle_noise_scale'], position_noise_scale=self.hparams['position_noise_scale'], composition=self.hparams['composition'], reverse_half=self.hparams['reverse_half'])
                 else:
                     dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"], transform=t)
 

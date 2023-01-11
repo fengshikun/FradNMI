@@ -8,7 +8,7 @@ cutoff_lower: 0.0
 cutoff_upper: 5.0
 dataset: PCQM4MV2_Dihedral2
 dataset_arg: null
-dataset_root: /sharefs/sharefs-skfeng/Denoising/data/pcq
+dataset_root: /home/fengshikun/Backup/Denoising/data/pcq
 derivative: false
 distance_influence: both
 distributed_backend: ddp

@@ -6,7 +6,7 @@ batch_size: 8
 coord_files: null
 cutoff_lower: 0.0
 cutoff_upper: 5.0
-dataset: MD17
+dataset: MD17A
 dataset_arg: aspirin
 dataset_root: /home/fengshikun/Backup/Denoising/data/md17
 derivative: true
@@ -59,6 +59,7 @@ md17: true
 seperate_noise: true
 output_model_noise: VectorOutput
 position_noise_scale: 0.005
+dihedral_angle_noise_scale: 0.3
 denoising_weight: 0.1
 layernorm_on_vec: null
 wandb_notes: ""
