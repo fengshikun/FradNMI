@@ -146,7 +146,7 @@ class MD17A(InMemoryDataset):
 
     available_molecules = list(molecule_files.keys())
 
-    def __init__(self, root, transform=None, pre_transform=None, dataset_arg=None, dihedral_angle_noise_scale=0.1, position_noise_scale=0.005, composition=False, reverse_half=False):
+    def __init__(self, root, transform=None, pre_transform=None, dataset_arg=None, dihedral_angle_noise_scale=0.1, position_noise_scale=0.005, composition=False, reverse_half=False, addh=False):
         assert dataset_arg is not None, (
             "Please provide the desired comma separated molecule(s) through"
             f"'dataset_arg'. Available molecules are {', '.join(MD17.available_molecules)} "
@@ -179,7 +179,8 @@ class MD17A(InMemoryDataset):
         self.position_noise_scale = position_noise_scale
         self.composition = composition
         self.reverse_half = reverse_half
-        
+        self.addh = addh
+
         global MOL_LST
         if MOL_LST is None:
             MOL_LST = np.load(f"{root}/processed/{MD17A.mol_npy_files[dataset_arg]}", allow_pickle=True)
@@ -199,7 +200,10 @@ class MD17A(InMemoryDataset):
         atom_num = mol.GetNumAtoms()
 
         # get rotate bond
-        no_h_mol = Chem.RemoveHs(mol)
+        if self.addh: # default: False
+            no_h_mol = mol
+        else:
+            no_h_mol = Chem.RemoveHs(mol)
         # rotable_bonds = get_torsions([mol])
         rotable_bonds = get_torsions([no_h_mol])
 
@@ -211,13 +215,15 @@ class MD17A(InMemoryDataset):
                 l_rb.reverse()
                 reverse_bonds.append(l_rb)
 
-        # prob = random.random()
-        if atom_num != org_atom_num or len(rotable_bonds) == 0: # or prob < self.random_pos_prb:
+        assert atom_num == org_atom_num
+        if len(rotable_bonds) == 0:
             pos_noise_coords = self.transform_noise(org_data.pos, self.position_noise_scale)
             org_data.pos_target = torch.tensor(pos_noise_coords - org_data.pos.numpy())
+            org_data.org_pos = org_data.pos
             org_data.pos = torch.tensor(pos_noise_coords)
-            exit(0)
             return org_data
+
+
 
         # else angel random
         # if len(rotable_bonds):

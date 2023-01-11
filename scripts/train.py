@@ -91,6 +91,7 @@ def get_args():
     parser.add_argument('--cod_denoise', type=bool, default=False, help='cod_denoise.')
 
     parser.add_argument('--reverse_half', type=bool, default=False, help='reverse_half.')
+    parser.add_argument('--addh', type=bool, default=False, help='add H atom.')
 
     parser.add_argument('--decay', type=bool, default=False, help='violate conformation rules or not.')
     parser.add_argument('--decay_coe', type=float, default=0.2, help='violate conformation rules or not.')
