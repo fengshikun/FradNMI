@@ -6,7 +6,7 @@ from torch_geometric.data import DataLoader
 from pytorch_lightning import LightningDataModule
 from pytorch_lightning.utilities import rank_zero_warn
 from torchmdnet import datasets
-from torchmdnet.utils import make_splits, MissingEnergyException
+from torchmdnet.utils import make_splits, MissingEnergyException, DataLoaderMasking
 from torch_scatter import scatter
 
 
@@ -18,6 +18,8 @@ class DataModule(LightningDataModule):
         self._mean, self._std = None, None
         self._saved_dataloaders = dict()
         self.dataset = dataset
+
+        self.mask_atom = hparams.mask_atom
 
     def setup(self, stage):
         if self.dataset is None:
@@ -43,7 +45,7 @@ class DataModule(LightningDataModule):
                 if 'BIAS' in self.hparams['dataset']:
                     dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], self.hparams['sdf_path'], self.hparams['position_noise_scale'], self.hparams['sample_number'], self.hparams['violate'], dataset_arg=self.hparams["dataset_arg"], transform=t)
                 elif 'Dihedral2' in self.hparams['dataset']:
-                    dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], self.hparams['sdf_path'], self.hparams['dihedral_angle_noise_scale'], self.hparams['position_noise_scale'], self.hparams['composition'], self.hparams['decay'], self.hparams['decay_coe'], dataset_arg=self.hparams["dataset_arg"], equilibrium=self.hparams['equilibrium'], eq_weight=self.hparams['eq_weight'], cod_denoise=self.hparams['cod_denoise'], transform=t)
+                    dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], self.hparams['sdf_path'], self.hparams['dihedral_angle_noise_scale'], self.hparams['position_noise_scale'], self.hparams['composition'], self.hparams['decay'], self.hparams['decay_coe'], dataset_arg=self.hparams["dataset_arg"], equilibrium=self.hparams['equilibrium'], eq_weight=self.hparams['eq_weight'], cod_denoise=self.hparams['cod_denoise'], integrate_coord=self.hparams['integrate_coord'], addh=self.hparams['addh'], mask_atom=self.hparams['mask_atom'], mask_ratio=self.hparams['mask_ratio'], transform=t)
                 elif 'Dihedral' in self.hparams['dataset']:
                     dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], self.hparams['sdf_path'], self.hparams['dihedral_angle_noise_scale'], self.hparams['position_noise_scale'], self.hparams['composition'], dataset_arg=self.hparams["dataset_arg"], transform=t)
                 elif 'QM9A' in self.hparams['dataset'] or 'MD17A' in self.hparams['dataset']:
@@ -54,7 +56,7 @@ class DataModule(LightningDataModule):
                             transform_y = None
                         dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"], transform=None, dihedral_angle_noise_scale=self.hparams['dihedral_angle_noise_scale'], position_noise_scale=self.hparams['position_noise_scale'], composition=self.hparams['composition'], transform_y=transform_y)
                     else: # MD17A
-                        dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"], transform=None, dihedral_angle_noise_scale=self.hparams['dihedral_angle_noise_scale'], position_noise_scale=self.hparams['position_noise_scale'], composition=self.hparams['composition'], reverse_half=self.hparams['reverse_half'], addh=self.hparams['addh'])
+                        dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"], transform=None, dihedral_angle_noise_scale=self.hparams['dihedral_angle_noise_scale'], position_noise_scale=self.hparams['position_noise_scale'], composition=self.hparams['composition'], reverse_half=self.hparams['reverse_half'], addh=self.hparams['addh'], cod_denoise=self.hparams['cod_denoise'])
                 else:
                     dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"], transform=t)
 
@@ -140,13 +142,22 @@ class DataModule(LightningDataModule):
             batch_size = self.hparams["inference_batch_size"]
             shuffle = False
 
-        dl = DataLoader(
-            dataset=dataset,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            num_workers=self.hparams["num_workers"],
-            pin_memory=True,
-        )
+        if self.mask_atom:
+            dl = DataLoaderMasking(
+                dataset=dataset,
+                batch_size=batch_size,
+                shuffle=shuffle,
+                num_workers=self.hparams["num_workers"],
+                pin_memory=True,
+            )
+        else:
+            dl = DataLoader(
+                dataset=dataset,
+                batch_size=batch_size,
+                shuffle=shuffle,
+                num_workers=self.hparams["num_workers"],
+                pin_memory=True,
+            )
 
         if store_dataloader:
             self._saved_dataloaders[stage] = dl

@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 
-__all__ = ["Scalar", "DipoleMoment", "ElectronicSpatialExtent"]
+__all__ = ["Scalar", "DipoleMoment", "ElectronicSpatialExtent", "MaskHead"]
 
 
 class OutputModel(nn.Module, metaclass=ABCMeta):
@@ -24,6 +24,28 @@ class OutputModel(nn.Module, metaclass=ABCMeta):
 
     def post_reduce(self, x):
         return x
+
+
+class MaskHead(OutputModel):
+    def __init__(self, hidden_channels, activation="silu", allow_prior_model=True, atom_num=119):
+        super(MaskHead, self).__init__(allow_prior_model=allow_prior_model)
+        act_class = act_class_mapping[activation]
+        self.output_network = nn.Sequential(
+            nn.Linear(hidden_channels, hidden_channels),
+            act_class(),
+            nn.Linear(hidden_channels, atom_num),
+        )
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.xavier_uniform_(self.output_network[0].weight)
+        self.output_network[0].bias.data.fill_(0)
+        nn.init.xavier_uniform_(self.output_network[2].weight)
+        self.output_network[2].bias.data.fill_(0)
+
+    def pre_reduce(self, x):
+        return self.output_network(x)
 
 
 class Scalar(OutputModel):

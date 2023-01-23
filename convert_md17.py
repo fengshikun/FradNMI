@@ -18,12 +18,15 @@ from rdkit.Geometry import Point3D
 if __name__ == "__main__":
 
     md17_mols_type = ['benzene2017', 'ethanol', 'malonaldehyde', 'naphthalene', 'salicylic', 'toluene', 'uracil']
+    md17_mols_type = ['salicylic', 'toluene', 'uracil']
 
     for md17_type in md17_mols_type:
         path = '/share/project/sharefs-skfeng/MD17/raw/'
         data_npz = np.load(f'{path}/{md17_type}_dft.npz')
         if md17_type == 'benzene2017':
             dataset_arg = 'benzene'
+        elif md17_type == 'salicylic':
+            dataset_arg = 'salicylic_acid'
         else:
             dataset_arg = md17_type
         md17_data = MD17('/share/project/sharefs-skfeng/MD17', dataset_arg=dataset_arg)

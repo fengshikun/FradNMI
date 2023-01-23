@@ -146,7 +146,7 @@ class MD17A(InMemoryDataset):
 
     available_molecules = list(molecule_files.keys())
 
-    def __init__(self, root, transform=None, pre_transform=None, dataset_arg=None, dihedral_angle_noise_scale=0.1, position_noise_scale=0.005, composition=False, reverse_half=False, addh=False):
+    def __init__(self, root, transform=None, pre_transform=None, dataset_arg=None, dihedral_angle_noise_scale=0.1, position_noise_scale=0.005, composition=False, reverse_half=False, addh=False, cod_denoise=False):
         assert dataset_arg is not None, (
             "Please provide the desired comma separated molecule(s) through"
             f"'dataset_arg'. Available molecules are {', '.join(MD17.available_molecules)} "
@@ -180,6 +180,7 @@ class MD17A(InMemoryDataset):
         self.composition = composition
         self.reverse_half = reverse_half
         self.addh = addh
+        self.cod_denoise = cod_denoise
 
         global MOL_LST
         if MOL_LST is None:
@@ -216,7 +217,7 @@ class MD17A(InMemoryDataset):
                 reverse_bonds.append(l_rb)
 
         assert atom_num == org_atom_num
-        if len(rotable_bonds) == 0:
+        if len(rotable_bonds) == 0 or self.cod_denoise:
             pos_noise_coords = self.transform_noise(org_data.pos, self.position_noise_scale)
             org_data.pos_target = torch.tensor(pos_noise_coords - org_data.pos.numpy())
             org_data.org_pos = org_data.pos

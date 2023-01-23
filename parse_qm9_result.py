@@ -8,7 +8,7 @@ task_dict = {'dipole_moment': 0, 'isotropic_polarizability': 1, 'homo': 2, 'lumo
 
 
 exp_dir_prefix = '/home/AI4Science/fengsk/Pretraining-Denoising/experiments/'
-exp_dir_prefix = '/sharefs/sharefs-skfeng/pre-training-via-denoising/experiments/'
+exp_dir_prefix = '/home/fengshikun/Pretraining-Denoising/experiments/'
 
 
 if __name__ == "__main__":
@@ -19,8 +19,8 @@ if __name__ == "__main__":
     # job_prefix = 'pretrain_baseline_var0.04_BIAS_violate_2'
 
     for task in task_dict:
-        log_file = f'{job_prefix}_qm9_{task}_finetuning.log'
-        exp_dir = f'{exp_dir_prefix}{job_prefix}_qm9_{task}_finetuning'
+        log_file = f'{job_prefix}_qm9_{task}__finetuning.log'
+        exp_dir = f'{exp_dir_prefix}{job_prefix}_qm9_{task}__finetuning'
         if not os.path.exists(log_file):
             print(f'task {log_file} not found')
             continue

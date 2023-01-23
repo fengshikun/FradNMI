@@ -201,7 +201,7 @@ if __name__ == "__main__":
     sample_num = 1000
     base_pos = md17_data[0].pos
 
-    sigma_lst = [20, 2, 1, 0.5, 0.1, 0.01, 0.001]
+    sigma_lst = [100, 50, 20, 2, 1, 0.5, 0.1, 0.01, 0.001]
     tau = 0.04
 
     # gaussian noise, tau=0.04

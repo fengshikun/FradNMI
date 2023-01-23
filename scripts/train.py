@@ -52,6 +52,8 @@ def get_args():
     parser.add_argument('--test-size', type=number, default=0.1, help='Percentage/number of samples in test set (None to use all remaining samples)')
     parser.add_argument('--test-interval', type=int, default=10, help='Test interval, one test per n epochs (default: 10)')
     parser.add_argument('--save-interval', type=int, default=10, help='Save interval, one save per n epochs (default: 10)')
+    parser.add_argument('--save-top-k', type=int, default=10, help='save the topk model, -1 save all')
+
     parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
     parser.add_argument('--distributed-backend', default='ddp', help='Distributed backend: dp, ddp, ddp2')
     parser.add_argument('--num-workers', type=int, default=4, help='Number of workers for data prefetch')
@@ -89,6 +91,7 @@ def get_args():
     parser.add_argument('--equilibrium', type=bool, default=False, help='equilibrium.')
     parser.add_argument('--eq_weight', type=bool, default=False, help='eq_weight.')
     parser.add_argument('--cod_denoise', type=bool, default=False, help='cod_denoise.')
+    parser.add_argument('--integrate_coord', type=bool, default=False, help='integrate_coord.')
 
     parser.add_argument('--reverse_half', type=bool, default=False, help='reverse_half.')
     parser.add_argument('--addh', type=bool, default=False, help='add H atom.')
@@ -99,6 +102,11 @@ def get_args():
     parser.add_argument('--no-target-mean', type=bool, default=False, help='violate conformation rules or not.')
     parser.add_argument('--sep-noisy-node', type=bool, default=False, help='sep noisy node')
     #sep-noisy-node
+    parser.add_argument('--train-loss-type', type=str, default='', help='train loss type')
+
+
+    parser.add_argument('--mask_atom', type=bool, default=False, help='mask atom or not')
+    parser.add_argument('--mask_ratio', type=float, default=0.15, help='mask ratio')
 
     # model architecture
     parser.add_argument('--model', type=str, default='graph-network', choices=models.__all__, help='Which model to train')
@@ -187,7 +195,7 @@ def main():
     checkpoint_callback = ModelCheckpoint(
         dirpath=args.log_dir,
         monitor="val_loss",
-        save_top_k=10,  # -1 to save all
+        save_top_k=args.save_top_k,  # -1 to save all
         period=args.save_interval,
         filename="{step}-{epoch}-{val_loss:.4f}-{test_loss:.4f}-{train_per_step:.4f}",
         save_last=True,

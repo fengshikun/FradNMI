@@ -270,7 +270,7 @@ EQ_EN_LST = None
 class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
     def __init__(self, root: str, sdf_path: str, dihedral_angle_noise_scale: float, position_noise_scale: float, composition: bool, decay=False, decay_coe=0.2, transform: Optional[Callable] = None,
                  pre_transform: Optional[Callable] = None,
-                 pre_filter: Optional[Callable] = None, dataset_arg: Optional[str] = None, equilibrium=False, eq_weight=False, cod_denoise=False):
+                 pre_filter: Optional[Callable] = None, dataset_arg: Optional[str] = None, equilibrium=False, eq_weight=False, cod_denoise=False, integrate_coord=False, addh=False, mask_atom=False, mask_ratio=0.15):
         assert dataset_arg is None, "PCQM4MV2_Dihedral does not take any dataset args."
         super().__init__(root, transform, pre_transform, pre_filter)
         # self.suppl = Chem.SDMolSupplier(sdf_path)
@@ -285,6 +285,13 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
         self.equilibrium = equilibrium # equilibrium settings
         self.eq_weight = eq_weight
         self.cod_denoise = cod_denoise # reverse to coordinate denoise
+
+        self.integrate_coord = integrate_coord
+        self.addh = addh
+
+        self.mask_atom = mask_atom
+        self.mask_ratio = mask_ratio
+        self.num_atom_type = 119
         
         global MOL_LST
         global EQ_MOL_LST
@@ -322,6 +329,15 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
         org_atom_num = org_data.pos.shape[0]
         # change org_data coordinate
         # get mol
+
+        # check whether mask or not
+        if self.mask_atom:
+            num_atoms = org_data.z.size(0)
+            sample_size = int(num_atoms * self.mask_ratio + 1)
+            masked_atom_indices = random.sample(range(num_atoms), sample_size)
+            org_data.mask_node_label = org_data.z[masked_atom_indices]
+            org_data.z[masked_atom_indices] = self.num_atom_type
+            org_data.masked_atom_indices = torch.tensor(masked_atom_indices)
 
         if self.equilibrium:
             # for debug
@@ -361,12 +377,24 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
         atom_num = mol.GetNumAtoms()
 
         # get rotate bond
-        no_h_mol = Chem.RemoveHs(mol)
-        # rotable_bonds = get_torsions([mol])
-        rotable_bonds = get_torsions([no_h_mol])
+        if self.addh:
+            rotable_bonds = get_torsions([mol])
+        else:
+            no_h_mol = Chem.RemoveHs(mol)
+            rotable_bonds = get_torsions([no_h_mol])
+        
 
         # prob = random.random()
-        if atom_num != org_atom_num or len(rotable_bonds) == 0 or self.cod_denoise: # or prob < self.random_pos_prb:
+        cod_denoise = self.cod_denoise
+        if self.integrate_coord:
+            assert not self.cod_denoise
+            prob = random.random()
+            if prob < 0.5:
+                cod_denoise = True
+            else:
+                cod_denoise = False
+
+        if atom_num != org_atom_num or len(rotable_bonds) == 0 or cod_denoise: # or prob < self.random_pos_prb:
             pos_noise_coords = self.transform_noise(org_data.pos, self.position_noise_scale)
             org_data.pos_target = torch.tensor(pos_noise_coords - org_data.pos.numpy())
             org_data.pos = torch.tensor(pos_noise_coords)

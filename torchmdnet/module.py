@@ -1,7 +1,7 @@
 import torch
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
-from torch.nn.functional import mse_loss, l1_loss
+from torch.nn.functional import mse_loss, l1_loss, smooth_l1_loss
 
 from pytorch_lightning import LightningModule
 from torchmdnet.models.model import create_model, load_model
@@ -29,6 +29,10 @@ class LNNP(LightningModule):
 
         # seperate noisy node and finetune target
         self.sep_noisy_node = self.hparams.sep_noisy_node
+        self.train_loss_type = self.hparams.train_loss_type
+
+        if self.hparams.mask_atom:
+            self.criterion = torch.nn.CrossEntropyLoss()
 
     def configure_optimizers(self):
         optimizer = AdamW(
@@ -65,10 +69,13 @@ class LNNP(LightningModule):
         return self.model(z, pos, batch=batch)
 
     def training_step(self, batch, batch_idx):
+        if self.train_loss_type == 'smooth_l1_loss':
+            return self.step(batch, smooth_l1_loss, 'train')
         return self.step(batch, mse_loss, "train")
 
     def validation_step(self, batch, batch_idx, *args):
         if len(args) == 0 or (len(args) > 0 and args[0] == 0):
+            return self.step(batch, l1_loss, "val")
             # validation step
             return self.step(batch, mse_loss, "val")
         # test step
@@ -92,7 +99,16 @@ class LNNP(LightningModule):
 
         denoising_is_on = ("pos_target" in batch) and (self.hparams.denoising_weight > 0) and (noise_pred is not None)
 
-        loss_y, loss_dy, loss_pos = 0, 0, 0
+        loss_y, loss_dy, loss_pos, mask_atom_loss = 0, 0, 0, 0
+
+
+        # check whether mask, only in pretraining, deriv is logits
+        if self.hparams.mask_atom:
+            mask_indices = batch['masked_atom_indices']
+            mask_logits = deriv[mask_indices]
+            mask_atom_loss = self.criterion(mask_logits, batch.mask_node_label)
+            self.losses[stage + "_mask_atom_loss"].append(mask_atom_loss.detach())
+
         if self.hparams.derivative:
             if "y" not in batch:
                 # "use" both outputs of the model's forward function but discard the first
@@ -162,6 +178,8 @@ class LNNP(LightningModule):
                 loss_fn = weighted_mse_loss
                 wt = batch['w1'].sum() / batch['idx'].shape[0]
                 weights = batch['wg'] / wt
+            else:
+                loss_fn = mse_loss
             if self.model.pos_normalizer is not None:
                 normalized_pos_target = self.model.pos_normalizer(batch.pos_target)
                 if 'wg'in batch.keys:
@@ -177,7 +195,7 @@ class LNNP(LightningModule):
             self.losses[stage + "_pos"].append(loss_pos.detach())
 
         # total loss
-        loss = loss_y * self.hparams.energy_weight + loss_dy * self.hparams.force_weight + loss_pos * self.hparams.denoising_weight
+        loss = loss_y * self.hparams.energy_weight + loss_dy * self.hparams.force_weight + loss_pos * self.hparams.denoising_weight + mask_atom_loss
 
         self.losses[stage].append(loss.detach())
 
@@ -291,6 +309,9 @@ class LNNP(LightningModule):
             "train_pos": [],
             "val_pos": [],
             "test_pos": [],
+            "train_mask_atom_loss": [],
+            "val_mask_atom_loss": [],
+            "test_mask_atom_loss": []
         }
 
     def _reset_ema_dict(self):

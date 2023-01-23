@@ -91,7 +91,11 @@ def create_model(args, prior_model=None, mean=None, std=None):
         output_model_noise = getattr(output_modules, output_prefix + args["output_model_noise"])(
             args["embedding_dimension"], args["activation"],
         )
-        
+    
+    output_model_mask_atom = None 
+    if args['mask_atom']:
+        output_model_mask_atom = getattr(output_modules, "MaskHead", args["embedding_dimension"])(args["embedding_dimension"], args["activation"],) 
+    
     # combine representation and output network
     model = TorchMD_Net(
         representation_model,
@@ -102,6 +106,7 @@ def create_model(args, prior_model=None, mean=None, std=None):
         std=std,
         derivative=args["derivative"],
         output_model_noise=output_model_noise,
+        output_model_mask_atom=output_model_mask_atom,
         position_noise_scale=args['position_noise_scale'],
         no_target_mean=args['no_target_mean'],
         seperate_noise=args['seperate_noise'],
@@ -154,6 +159,7 @@ class TorchMD_Net(nn.Module):
         position_noise_scale=0.,
         no_target_mean=False,
         seperate_noise=False,
+        output_model_mask_atom=None
     ):
         super(TorchMD_Net, self).__init__()
         self.representation_model = representation_model
@@ -175,6 +181,8 @@ class TorchMD_Net(nn.Module):
         self.position_noise_scale = position_noise_scale
         self.no_target_mean = no_target_mean
         self.seperate_noise = seperate_noise
+
+        self.output_model_mask_atom = output_model_mask_atom
 
         mean = torch.scalar_tensor(0) if mean is None else mean
         self.register_buffer("mean", mean)
@@ -207,6 +215,13 @@ class TorchMD_Net(nn.Module):
             # run the potentially wrapped representation model
             x, v, z, pos, batch = self.representation_model(z, pos, batch=batch)
             nv = None
+
+
+        # whether mask or not
+        mask_logits = None
+        if self.output_model_mask_atom is not None:
+            mask_logits = self.output_model_mask_atom.pre_reduce(x)
+
 
         # predict noise
         noise_pred = None
@@ -251,7 +266,8 @@ class TorchMD_Net(nn.Module):
                 raise RuntimeError("Autograd returned None for the force prediction.")
             return out, noise_pred, -dy
         # TODO: return only `out` once Union typing works with TorchScript (https://github.com/pytorch/pytorch/pull/53180)
-        return out, noise_pred, None
+        # return out, noise_pred, None
+        return out, noise_pred, mask_logits
 
 
 class AccumulatedNormalization(nn.Module):

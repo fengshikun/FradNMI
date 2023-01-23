@@ -12,6 +12,8 @@ md17_task = {'aspirin', 'benzene', 'ethanol', 'malonaldehyde'}
 
 md17_task = {'naphthalene', 'salicylic_acid', 'toluene', 'uracil'}
 
+md17_task = {'benzene', 'ethanol', 'malonaldehyde', 'naphthalene', 'salicylic_acid', 'toluene', 'uracil'}
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch implementation of pre-training of graph neural networks')
     # parser.add_argument("--pretrain_model", type=str, default="sce")
