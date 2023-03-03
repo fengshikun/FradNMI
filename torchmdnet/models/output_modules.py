@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 
-__all__ = ["Scalar", "DipoleMoment", "ElectronicSpatialExtent", "MaskHead"]
+__all__ = ["Scalar", "DipoleMoment", "ElectronicSpatialExtent", "MaskHead", "ElectronicSpatialExtent2", "VectorOutput2"]
 
 
 class OutputModel(nn.Module, metaclass=ABCMeta):
@@ -172,6 +172,41 @@ class ElectronicSpatialExtent(OutputModel):
         return x
 
 
+
+
+class EquivariantElectronicSpatialExtent2(EquivariantScalar):
+    def __init__(self, hidden_channels, activation="silu"):
+        super(EquivariantElectronicSpatialExtent2, self).__init__(hidden_channels, activation, allow_prior_model=False)
+        # act_class = act_class_mapping[activation]
+        # self.output_network = nn.Sequential(
+        #     nn.Linear(hidden_channels, hidden_channels // 2),
+        #     act_class(),
+        #     nn.Linear(hidden_channels // 2, 1),
+        # )
+        atomic_mass = torch.from_numpy(ase.data.atomic_masses).float()
+        self.register_buffer("atomic_mass", atomic_mass)
+
+        # self.reset_parameters()
+
+    # def reset_parameters(self):
+    #     nn.init.xavier_uniform_(self.output_network[0].weight)
+    #     self.output_network[0].bias.data.fill_(0)
+    #     nn.init.xavier_uniform_(self.output_network[2].weight)
+    #     self.output_network[2].bias.data.fill_(0)
+
+    def pre_reduce(self, x, v: Optional[torch.Tensor], z, pos, batch):
+        # x = self.output_network(x)
+        for layer in self.output_network:
+            x, v = layer(x, v)
+
+        # Get center of mass.
+        mass = self.atomic_mass[z].view(-1, 1)
+        c = scatter(mass * pos, batch, dim=0) / scatter(mass, batch, dim=0)
+
+        x = torch.norm(pos - c[batch], dim=1, keepdim=True) ** 2 * x
+        return x
+
+
 class EquivariantElectronicSpatialExtent(ElectronicSpatialExtent):
     pass
 
@@ -185,4 +220,38 @@ class EquivariantVectorOutput(EquivariantScalar):
     def pre_reduce(self, x, v, z, pos, batch):
         for layer in self.output_network:
             x, v = layer(x, v)
+        return v.squeeze()
+
+
+class EquivariantVectorOutput2(OutputModel):
+    # def __init__(self, hidden_channels, activation="silu"):
+    #     super(EquivariantVectorOutput, self).__init__(
+    #         hidden_channels, activation, allow_prior_model=False
+    #     )
+
+    # def pre_reduce(self, x, v, z, pos, batch):
+    #     for layer in self.output_network:
+    #         x, v = layer(x, v)
+    #     return v.squeeze()
+    
+    def __init__(self, hidden_channels, activation="silu", allow_prior_model=True):
+        super(EquivariantVectorOutput2, self).__init__(allow_prior_model=allow_prior_model)
+        act_class = act_class_mapping[activation]
+        self.output_network = nn.Sequential(
+            nn.Linear(hidden_channels, hidden_channels // 2),
+            act_class(),
+            nn.Linear(hidden_channels // 2, 1),
+        )
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.xavier_uniform_(self.output_network[0].weight)
+        self.output_network[0].bias.data.fill_(0)
+        nn.init.xavier_uniform_(self.output_network[2].weight)
+        self.output_network[2].bias.data.fill_(0)
+
+    def pre_reduce(self, x, v: Optional[torch.Tensor], z, pos, batch):
+        v = self.output_network(v)
+
         return v.squeeze()

@@ -82,6 +82,9 @@ class LNNP(LightningModule):
         return self.step(batch, l1_loss, "test")
 
     def test_step(self, batch, batch_idx):
+        # res = self.step(batch, l1_loss, "test")
+        # print(res)
+        # return res
         return self.step(batch, l1_loss, "test")
 
     def step(self, batch, loss_fn, stage):
@@ -235,6 +238,14 @@ class LNNP(LightningModule):
                 # than skipping test validation steps by returning None
                 self.trainer.reset_val_dataloader(self)
 
+    def test_epoch_end(self, outputs):
+        result_dict = {}
+        if len(self.losses["test_y"]) > 0:
+                result_dict["test_loss_y"] = torch.stack(
+                    self.losses["test_y"]
+                ).mean()
+        return result_dict
+    
     # TODO(shehzaidi): clean up this function, redundant logging if dy loss exists.
     def validation_epoch_end(self, validation_step_outputs):
         if not self.trainer.running_sanity_check:
