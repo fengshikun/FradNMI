@@ -1,0 +1,7 @@
+python -u scripts/train.py --conf examples/ET-QM9-FT_E.yaml --layernorm-on-vec whitened --job-id ET-PCQM4MV2_dih_var0.04_var2_com_re_qm9_electronic_spatial_extent_train_loss_type_smooth_l1_loss_finetuning --dataset-arg electronic_spatial_extent --pretrained-model /share/project/sharefs-skfeng/pre-training-via-denoising/experiments/pretrain_models/ET-PCQM4MV2_dih_var0.04_var2_com_re/step=399999-epoch=8-val_loss=0.1422-test_loss=0.2784-train_per_step=0.1512.ckpt --train-loss-type smooth_l1_loss > ET-PCQM4MV2_dih_var0.04_var2_com_re_qm9_electronic_spatial_extent_train_loss_type_smooth_l1_loss_finetuning.log
+
+
+python -u scripts/train.py --conf examples/ET-QM9-FT_E_dw_0.1_long.yaml --layernorm-on-vec whitened --job-id ET-PCQM4MV2_dih_var0.04_var2_com_re_long_qm9_electronic_spatial_extent_train_loss_type_smooth_l1_loss_finetuning --dataset-arg electronic_spatial_extent --pretrained-model /share/project/sharefs-skfeng/pre-training-via-denoising/experiments/pretrain_models/ET-PCQM4MV2_dih_var0.04_var2_com_re/step=399999-epoch=8-val_loss=0.1422-test_loss=0.2784-train_per_step=0.1512.ckpt --train-loss-type smooth_l1_loss > ET-PCQM4MV2_dih_var0.04_var2_com_re_long_qm9_electronic_spatial_extent_train_loss_type_smooth_l1_loss_finetuning.log
+
+
+python -u scripts/train.py --conf examples/ET-QM9-FT_E.yaml --layernorm-on-vec whitened --job-id Qm9_electronic_spatial_extent_wo_pretrain > Qm9_electronic_spatial_extent_wo_pretrain.log
