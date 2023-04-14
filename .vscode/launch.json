@@ -1,0 +1,200 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Python: Test",
+            "type": "python",
+            "request": "launch",
+            "program": "scripts/test.py",
+            "cwd": "/home/fengshikun/Pretraining-Denoising",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--conf",
+                "examples/ET-QM9-FT.yaml",
+                "--layernorm-on-vec",
+                "whitened",
+                "--job-id",
+                "gap_testing",
+                "--dataset-arg",
+                "gap",
+                "--pretrained-model",
+                "/home/fengshikun/Pretraining-Denoising/experiments/ET-PCQM4MV2_dih_var0.04_var2_com_re_long_qm9_gap_train_loss_type_smooth_l1_loss_finetuning/step=498799-epoch=579-val_loss=0.0275-test_loss=0.0273-train_per_step=0.0013.ckpt"
+            ]
+        },
+        {
+            "name": "Python: Pretraining",
+            "type": "python",
+            "request": "launch",
+            "program": "scripts/train.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--conf",
+                // "examples/ET-PCQM4MV2_var0.04_var0.1_com_re_md17_eqb.yaml",
+                // "examples/ET-PCQM4MV2_dih_var0.04_var2_com_re_equilibrim_eqw_80epoch.yaml",
+                // "examples/ET-PCQM4MV2_dih_var0.04_var2_com_re_40epoch_addh.yaml",
+                // "examples/ET-PCQM4MV2_dih_var0.04_var2_com_re_32epoch_addh_inte.yaml",
+                "examples/ET-PCQM4V2_dih_var0.04_var2_predict_force.yaml",
+                "--layernorm-on-vec",
+                "whitened",
+                "--job-id",
+                "pretraining_1w_guassian_noise_8epoch",
+                // "--cod_denoise", "true",
+                "--num-epochs", "8",
+                "--rdkit_conf", "true",
+                // "--force_field", "false",
+                // "--pred_noise", "true",
+                // "--mask_atom",
+                // "true",
+                // "--max-z",
+                // "120",
+                // "--mask_ratio",
+                // "0.3",
+                // "--output-model-noise",
+                // "VectorOutput2",
+            ],
+            "env": {
+                "WANDB_DISABLED": "true",
+                // "CUDA_VISIBLE_DEVICES": "2",
+                // "CUDA_LAUNCH_BLOCKING": "1",
+            }
+        },
+        {
+            "name": "Python: finetuning QM9 Elect",
+            "type": "python",
+            "request": "launch",
+            "program": "scripts/train.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--conf",
+                // "examples/ET-QM9-prior.yaml",
+                // "examples/ET-QM9-FT_stage2.yaml",
+                "examples/ET-QM9-FT_E.yaml",
+                "--layernorm-on-vec",
+                "whitened",
+                "--job-id",
+                "finetuning",
+                "--dataset-arg",
+                "electronic_spatial_extent",
+                "--denoising-weight",
+                "0"
+                // "--pretrained-model",
+                // "/home/fengshikun/Pretraining-Denoising/experiments/ET-PCQM4MV2_dih_var0.04_var2_com_re_mask_addh_vector_output2/step=399999-epoch=8-val_loss=0.1544-test_loss=0.1475-train_per_step=0.1440.ckpt"
+                // "--output-model",
+                // "ElectronicSpatialExtent2",
+                // "--pretrained-model",
+                // // "/sharefs/sharefs-skfeng/pre-training-via-denoising/experiments/ET-PCQM4MV2_BIAS_1k_var0.1/step=399999-epoch=8-val_loss=0.1087-test_loss=0.2656-train_per_step=0.1184.ckpt"
+                // "/share/project/sharefs-skfeng/pre-training-via-denoising/experiments/pretrain_models/ET-PCQM4MV2_var0.04_s/step=399999-epoch=8-val_loss=0.1139-test_loss=0.2531-train_per_step=0.1102.ckpt"
+            ]
+        },
+        {
+            "name": "Python: finetuning QM9 Dip",
+            "type": "python",
+            "request": "launch",
+            "program": "scripts/train.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--conf",
+                // "examples/ET-QM9-prior.yaml",
+                // "examples/ET-QM9-FT_stage2.yaml",
+                // "examples/ET-QM9-FT_E.yaml",
+                "examples/ET-QM9-FT_D.yaml",
+                "--layernorm-on-vec",
+                "whitened",
+                "--job-id",
+                "finetuning",
+                "--dataset-arg",
+                "dipole_moment",
+                "--pretrained-model",
+                // "/sharefs/sharefs-skfeng/pre-training-via-denoising/experiments/ET-PCQM4MV2_BIAS_1k_var0.1/step=399999-epoch=8-val_loss=0.1087-test_loss=0.2656-train_per_step=0.1184.ckpt"
+                "/share/project/sharefs-skfeng/pre-training-via-denoising/experiments/pretrain_models/ET-PCQM4MV2_var0.04_s/step=399999-epoch=8-val_loss=0.1139-test_loss=0.2531-train_per_step=0.1102.ckpt"
+            ]
+        },
+        {
+            "name": "Python: finetune QM9",
+            "type": "python",
+            "request": "launch",
+            "program": "scripts/train.py",
+            "console": "integratedTerminal",
+            "cwd": "/home/fengshikun/Pretraining-Denoising",
+            "justMyCode": false,
+            "args": [
+                "--conf",
+                // "examples/ET-QM9-FT-nt.yaml",
+                // "examples/ET-QM9-FT-nt-angel.yaml",
+                "examples/ET-QM9-FT_S.yaml",
+                "--layernorm-on-vec",
+                "whitened",
+                "--job-id",
+                "ET_debug",
+                "--dataset-arg",
+                "energy_U0",
+                "--sep-noisy-node",
+                "true",
+                "--train-loss-type",
+                "smooth_l1_loss",
+                "--pretrained-model",
+                "/home/fengshikun/Pretraining-Denoising/experiments/ET-PCQM4MV2_denan/step=399999-epoch=8-val_loss=0.1244-test_loss=0.2514-train_per_step=0.1221.ckpt"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "7",
+                "WANDB_DISABLED": "true"
+            }
+        },
+        {
+            "name": "Python: finetune md17 abi",
+            "type": "python",
+            "request": "launch",
+            "program": "scripts/train.py",
+            "console": "integratedTerminal",
+            "cwd": "/home/fengshikun/Pretraining-Denoising",
+            "justMyCode": false,
+            "args": [
+                "--conf",
+                // "examples/ET-QM9-FT-nt.yaml",
+                // "examples/ET-MD17_FT-angle.yaml",
+                // "examples/ET-MD17_FT-angle_9500.yaml",
+                "examples/ET-MD17_FT-angle.yaml",
+                "--job-id",
+                "md17_aspirin_debug",
+                "--dataset-arg",
+                "aspirin",
+                // "benzene",
+                // "ethanol",
+                // "--addh", "true",
+                "--pretrained-model",
+                "/share/project/sharefs-skfeng/pre-training-via-denoising/experiments/pretrain_models/ET-PCQM4MV2_var0.04_var2_com_re_md17/step=399999-epoch=8-val_loss=0.1626-test_loss=0.2945-train_per_step=0.1681.ckpt",
+                "--composition",
+                "true",
+                "--sep-noisy-node",
+                "true",
+                "--position-noise-scale",
+                "0.005",
+                "--dihedral-angle-noise-scale",
+                "20",
+                "--cod_denoise",
+                "true",
+                // "--reverse_half", "true"
+                // "/home/fengshikun/Pretraining-Denoising/experiments/ET-PCQM4MV2_denan/step=399999-epoch=8-val_loss=0.1244-test_loss=0.2514-train_per_step=0.1221.ckpt"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0",
+                "WANDB_DISABLED": "true"
+            }
+        }
+    ]
+}
