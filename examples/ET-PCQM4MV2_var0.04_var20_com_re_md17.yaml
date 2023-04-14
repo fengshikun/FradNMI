@@ -69,3 +69,4 @@ layernorm_on_vec: null
 wandb_notes: ""
 job_id: auto
 md17: true
+addh: True

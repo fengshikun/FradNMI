@@ -91,6 +91,7 @@ def get_args():
     parser.add_argument('--equilibrium', type=bool, default=False, help='equilibrium.')
     parser.add_argument('--eq_weight', type=bool, default=False, help='eq_weight.')
     parser.add_argument('--cod_denoise', type=bool, default=False, help='cod_denoise.')
+    parser.add_argument('--rdkit_conf', type=bool, default=False, help='rdkit_conf.')
     parser.add_argument('--integrate_coord', type=bool, default=False, help='integrate_coord.')
 
     parser.add_argument('--reverse_half', type=bool, default=False, help='reverse_half.')
@@ -98,6 +99,9 @@ def get_args():
 
     parser.add_argument('--decay', type=bool, default=False, help='violate conformation rules or not.')
     parser.add_argument('--decay_coe', type=float, default=0.2, help='violate conformation rules or not.')
+
+    parser.add_argument('--force_field', type=bool, default=False, help='predict force field')
+    parser.add_argument('--pred_noise', type=bool, default=False, help='predict the noise')
 
     parser.add_argument('--no-target-mean', type=bool, default=False, help='violate conformation rules or not.')
     parser.add_argument('--sep-noisy-node', type=bool, default=False, help='sep noisy node')

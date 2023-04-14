@@ -40,6 +40,9 @@ config_lst = ['examples/ET-PCQM4MV2_dih_var0.04_var1_com_re_40epoch.yaml', 'exam
 
 config_lst = ['examples/ET-PCQM4MV2_dih_var0.04_equilibrim_80epoch_addh.yaml', 'examples/ET-PCQM4MV2_dih_var0.04_equilibrim_eqw_80epoch_addh.yaml', 'examples/ET-PCQM4MV2_dih_var0.04_var1_com_re_40epoch_addh.yaml', 'examples/ET-PCQM4MV2_dih_var0.04_var2_com_re_40epoch_addh.yaml', 'examples/ET-PCQM4MV2_dih_var0.04_var3_com_re_40epoch_addh.yaml' ,'examples/ET-PCQM4MV2_dih_var0.04_var2_com_re_32epoch_addh_inte.yaml', 'examples/ET-PCQM4MV2_var0.04_var2_com_re_md17_32epoch_addh_inte.yaml']
 
+
+config_lst = ['examples/ET-PCQM4MV2_var0.04_var1_com_re_md17.yaml', 'examples/ET-PCQM4MV2_var0.4_var2_com_re_md17.yaml', 'examples/ET-PCQM4MV2_var0.04_var2_com_re_md17.yaml', 'examples/ET-PCQM4MV2_var0.004_var2_com_re_md17.yaml', 'examples/ET-PCQM4MV2_var0.04_var20_com_re_md17.yaml', 'examples/ET-PCQM4MV2_dih_var0.4_var2_com_re.yaml', 'examples/ET-PCQM4MV2_dih_var0.004_var2_com_re.yaml']
+
 for config in config_lst:
     job_name = os.path.split(config)[-1][:-5]
     #  + '_denan'

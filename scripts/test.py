@@ -108,6 +108,10 @@ def get_args():
     parser.add_argument('--mask_atom', type=bool, default=False, help='mask atom or not')
     parser.add_argument('--mask_ratio', type=float, default=0.15, help='mask ratio')
 
+    parser.add_argument('--force_field', type=bool, default=False, help='predict force field')
+    parser.add_argument('--pred_noise', type=bool, default=False, help='directly predict noise')
+
+
     # model architecture
     parser.add_argument('--model', type=str, default='graph-network', choices=models.__all__, help='Which model to train')
     parser.add_argument('--output-model', type=str, default='Scalar', choices=output_modules.__all__, help='The type of output model')

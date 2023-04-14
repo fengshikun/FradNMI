@@ -469,6 +469,149 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
 
 
 
+# learn force field exp
+ORG_MOLS = None
+SAMPLE_POS = None
+FORCES_LABEL = None
+
+# exp1: noisy node --> dft force feild
+# exp2: noisy node --> noisy
+# exp3: frad noisy node
+
+
+# exp4: use rkdit conformation: frad or coord denoise
+class PCQM4MV2_DihedralF(PCQM4MV2_XYZ):
+    def __init__(self, root: str, sdf_path: str, dihedral_angle_noise_scale: float, position_noise_scale: float, composition: bool, force_field: bool=False, pred_noise: bool=False, transform: Optional[Callable] = None,
+                 pre_transform: Optional[Callable] = None,
+                 pre_filter: Optional[Callable] = None, dataset_arg: Optional[str] = None, cod_denoise=False, rdkit_conf=False):
+        assert dataset_arg is None, "PCQM4MV2_Dihedral does not take any dataset args."
+        super().__init__(root, transform, pre_transform, pre_filter)
+        # self.suppl = Chem.SDMolSupplier(sdf_path)
+        self.dihedral_angle_noise_scale = dihedral_angle_noise_scale
+        self.position_noise_scale = position_noise_scale
+        self.composition = composition # compose dihedral angle and position noise
+        self.force_field = force_field
+        self.pred_noise = pred_noise
+
+        self.rdkit_conf = rdkit_conf
+
+        
+        global ORG_MOLS
+        global SAMPLE_POS
+        global FORCES_LABEL
+        if ORG_MOLS is None:
+            if self.rdkit_conf:
+                ORG_MOLS = np.load('/home/fengshikun/Pretraining-Denoising/rdkit_mols_conf_lst.npy', allow_pickle=True)    
+            else:
+                ORG_MOLS = np.load('/home/fengshikun/Backup/Denoising/data/dft/head_1w/mols_head_1w.npy', allow_pickle=True)
+                SAMPLE_POS = np.load('/home/fengshikun/Backup/Denoising/data/dft/head_1w/mols_head_1w_pos.npy', allow_pickle=True)
+                FORCES_LABEL = np.load('/home/fengshikun/Backup/Denoising/data/dft/head_1w/mols_head_1w_force.npy', allow_pickle=True)
+        self.mol_num = len(ORG_MOLS)
+        self.cod_denoise = cod_denoise
+        print(f'load PCQM4MV2_DihedralF complete, mol num is {self.mol_num}')
+    
+    def process_data(self, max_node_num=30):
+        pass
+
+
+    def __len__(self):
+        return self.mol_num
+
+    
+    def transform_noise(self, data, position_noise_scale):
+        noise = torch.randn_like(torch.tensor(data)) * position_noise_scale
+        data_noise = data + noise.numpy()
+        return data_noise
+
+    def __getitem__(self, idx: Union[int, np.integer, IndexType]) -> Union['Dataset', Data]:
+        org_data = super().__getitem__(idx)
+        org_mol = ORG_MOLS[idx.item()]
+        # get org pos
+
+        org_atom_num = org_data.pos.shape[0]
+
+        atom_num = org_mol.GetNumAtoms()
+
+        
+        # assert org_atom_num == atom_num
+        org_pos = np.zeros((atom_num, 3), dtype=np.float32)
+        # pos_noise_coords = new_mol.GetConformer().GetPositions()
+        
+        # check the conformers number(when use the rdkit generated conformers, conf number may be zero)
+        conf_num = org_mol.GetNumConformers()
+        if not conf_num:
+            # use the orginal pos
+            assert self.rdkit_conf # this only happen when use rdkit generated conf
+            org_pos = org_data.pos
+            coord_conf = Chem.Conformer(org_mol.GetNumAtoms())
+
+            if org_atom_num != atom_num:
+                pos_noise_coords = self.transform_noise(org_pos, self.position_noise_scale)
+                org_data.pos_target = torch.tensor(pos_noise_coords - org_pos)
+                org_data.pos = torch.tensor(pos_noise_coords)
+                return org_data
+
+            for i in range(atom_num):
+                coord_conf.SetAtomPosition(i, (org_pos[i][0].item(), org_pos[i][1].item(), org_pos[i][2].item()))
+            org_mol.AddConformer(coord_conf)
+        else:
+            coord_conf = org_mol.GetConformer()
+            atoms = org_mol.GetAtoms()
+            z_lst = [] # the force filed data may not consistant with the original data with same index. we only pick mols which have less atoms than 30 atoms.
+            for i in range(atom_num):
+                c_pos = coord_conf.GetAtomPosition(i)
+                org_pos[i] = [float(c_pos.x), float(c_pos.y), float(c_pos.z)]
+                atom = atoms[i]
+                z_lst.append(atom.GetAtomicNum()) # atomic num start from 1
+            
+            org_data.z = torch.tensor(z_lst) # atomic num start from 1
+        # random sample one pos
+        if self.force_field or self.pred_noise:
+            sample_poses = SAMPLE_POS[idx]
+            sample_pos_num = len(sample_poses)
+            random_idx = random.randint(0, sample_pos_num - 1)
+            sample_pos = sample_poses[random_idx]
+            
+            force_label = FORCES_LABEL[idx][random_idx]
+
+        if self.force_field:
+            org_data.pos_target = torch.tensor(force_label)
+            org_data.pos = torch.tensor(sample_pos)
+        elif self.pred_noise:
+            org_data.pos_target = torch.tensor(sample_pos - org_pos)
+            org_data.pos = torch.tensor(sample_pos)
+        elif self.composition:
+            rotable_bonds = get_torsions([org_mol])
+            if len(rotable_bonds) == 0 or self.cod_denoise:
+                pos_noise_coords = self.transform_noise(org_pos, self.position_noise_scale)
+                org_data.pos_target = torch.tensor(pos_noise_coords - org_pos)
+                org_data.pos = torch.tensor(pos_noise_coords)
+                return org_data
+
+            org_angle = []
+            for rot_bond in rotable_bonds:
+                org_angle.append(GetDihedral(org_mol.GetConformer(), rot_bond))
+            org_angle = np.array(org_angle)        
+            noise_angle = self.transform_noise(org_angle, self.dihedral_angle_noise_scale)
+            new_mol = apply_changes(org_mol, noise_angle, rotable_bonds)
+        
+            coord_conf = new_mol.GetConformer()
+            pos_noise_coords_angle = np.zeros((atom_num, 3), dtype=np.float32)
+            # pos_noise_coords = new_mol.GetConformer().GetPositions()
+            for idx in range(atom_num):
+                c_pos = coord_conf.GetAtomPosition(idx)
+                pos_noise_coords_angle[idx] = [float(c_pos.x), float(c_pos.y), float(c_pos.z)]
+
+            pos_noise_coords = self.transform_noise(pos_noise_coords_angle, self.position_noise_scale)
+            org_data.pos_target = torch.tensor(pos_noise_coords - pos_noise_coords_angle)
+            org_data.pos = torch.tensor(pos_noise_coords)
+        else:
+            raise Exception('Not implemented situation, one of pred_noise, composition and force_filed should be true')
+        
+        return org_data
+
+
+
 class PCQM4MV2_3D:
     """Data loader for PCQM4MV2 from raw xyz files.
     
