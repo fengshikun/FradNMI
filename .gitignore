@@ -140,3 +140,6 @@ lightning_logs/
 data/
 experiments/
 plots/
+
+*.sdf
+*.npy

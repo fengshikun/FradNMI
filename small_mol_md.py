@@ -13,8 +13,9 @@ from openforcefield.utils.toolkits import AmberToolsToolkitWrapper
 from simtk import openmm
 from simtk import unit
 from rdkit import Chem
+import numpy as np
  
-def run_md(molecule, confId=0):
+def run_md(molecule, confId=0, save_prefix=0):
     off_topology = molecule.to_topology()
     omm_topology = off_topology.to_openmm()
     system = forcefield.create_openmm_system(off_topology)
@@ -22,6 +23,8 @@ def run_md(molecule, confId=0):
     time_step = config["time_step"] * unit.femtoseconds
     temperature = config["temperature"] * unit.kelvin
     friction = 1 / unit.picosecond
+
+    # TODO fix params
     integrator = openmm.LangevinIntegrator(temperature, friction, time_step)
      
     conf = molecule.conformers[confId]
@@ -31,8 +34,8 @@ def run_md(molecule, confId=0):
     simulation.context.setPositions(conf)
     if not os.path.isdir('./log'):
         os.mkdir('./log')
-    pdb_reporter = openmm.app.PDBReporter('./log/trj.pdb', config["trj_freq"])
-    state_data_reporter = openmm.app.StateDataReporter("./log/data.csv",
+    pdb_reporter = openmm.app.PDBReporter(f'./log/trj_{save_prefix}.pdb', config["trj_freq"])
+    state_data_reporter = openmm.app.StateDataReporter(f"./log/data_{save_prefix}.csv",
                                                        config["data_freq"],
                                                        step=True,
                                                        potentialEnergy=True,
@@ -49,6 +52,15 @@ def run_md(molecule, confId=0):
 if __name__=="__main__":
     forcefield = ForceField("openff-1.0.0.offxml")
     config = yaml.load(open("mdconf.yml", "r"), yaml.Loader)
-    molecule = Molecule.from_smiles(sys.argv[1])
-    molecule.generate_conformers()
-    run_md(molecule)
+    # molecule = Molecule.from_smiles(sys.argv[1])
+    
+    MOL_LST = np.load("h_mol_lst.npy", allow_pickle=True)
+    
+    log_num = 10
+
+
+    for i in range(log_num):
+        rd_mol = MOL_LST[i]
+        molecule = Molecule.from_rdkit(rd_mol)
+        # molecule.generate_conformers()
+        run_md(molecule, save_prefix=i)
