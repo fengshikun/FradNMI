@@ -14,13 +14,33 @@ from simtk import openmm
 from simtk import unit
 from rdkit import Chem
 import numpy as np
+from openmm.unit import kilojoules, mole, nanometer
+
+class ForceReporter(object):
+    def __init__(self, file, reportInterval):
+        self._out = open(file, 'w')
+        self._reportInterval = reportInterval
+
+    def __del__(self):
+        self._out.close()
+
+    def describeNextReport(self, simulation):
+        steps = self._reportInterval - simulation.currentStep%self._reportInterval
+        return (steps, False, False, True, False, None)
+
+    def report(self, simulation, state):
+        forces = state.getForces().value_in_unit(kilojoules/mole/nanometer) # /mole/nanometer
+        for f in forces:
+            self._out.write('%g %g %g\n' % (f[0], f[1], f[2]))
  
+# todo rdkit generated conformations.
+
 def run_md(molecule, confId=0, save_prefix=0):
     off_topology = molecule.to_topology()
     omm_topology = off_topology.to_openmm()
     system = forcefield.create_openmm_system(off_topology)
  
-    time_step = config["time_step"] * unit.femtoseconds
+    time_step = config["time_step"] * unit.femtoseconds # more fine-grained
     temperature = config["temperature"] * unit.kelvin
     friction = 1 / unit.picosecond
 
@@ -43,6 +63,8 @@ def run_md(molecule, confId=0, save_prefix=0):
                                                        density=True)
     simulation.reporters.append(pdb_reporter)
     simulation.reporters.append(state_data_reporter)
+
+    simulation.reporters.append(ForceReporter(f'forces_{save_prefix}.txt', 10))
     start = time.process_time()
     simulation.step(config["num_steps"])
     end = time.process_time()
