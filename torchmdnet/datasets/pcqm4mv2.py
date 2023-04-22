@@ -20,7 +20,7 @@ import torch
 from torch_geometric.data import (InMemoryDataset, download_url, extract_zip,
                                   Data)
 
-from torsion_utils import get_torsions, GetDihedral, apply_changes, get_rotate_order_info
+from torsion_utils import get_torsions, GetDihedral, apply_changes, get_rotate_order_info, add_equi_noise
 from rdkit.Geometry import Point3D
 
 
@@ -262,6 +262,81 @@ class PCQM4MV2_Dihedral(PCQM4MV2_XYZ):
         
         return org_data
 
+
+
+
+# use force filed definition
+# bond length, angle ,dihedral angel
+class PCQM4MV2_Force(PCQM4MV2_XYZ):
+    def __init__(self, root: str, sdf_path: str, dihedral_angle_noise_scale: float, angle_noise_scale: float, bond_length_scale: float, transform: Optional[Callable] = None,
+                 pre_transform: Optional[Callable] = None,
+                 pre_filter: Optional[Callable] = None, dataset_arg: Optional[str] = None):
+        assert dataset_arg is None, "PCQM4MV2_Dihedral does not take any dataset args."
+        super().__init__(root, transform, pre_transform, pre_filter)
+        # self.suppl = Chem.SDMolSupplier(sdf_path)
+        self.dihedral_angle_noise_scale = dihedral_angle_noise_scale
+        self.angle_noise_scale = angle_noise_scale
+        self.bond_length_scale = bond_length_scale
+        
+        global MOL_LST
+        if MOL_LST is None:
+            # import pickle
+            # with open(sdf_path, 'rb') as handle:
+            #     MOL_LST = pickle.load(handle)
+            # MOL_LST = np.load("mol_iter_all.npy", allow_pickle=True)
+                MOL_LST = np.load("h_mol_lst.npy", allow_pickle=True)
+
+        if debug:
+            global MOL_DEBUG_LST
+            if MOL_DEBUG_LST is None:
+                # MOL_DEBUG_LST = Chem.SDMolSupplier("pcqm4m-v2-train.sdf")
+                MOL_DEBUG_LST = np.load("mol_iter_all.npy", allow_pickle=True)
+    
+    def transform_noise(self, data, position_noise_scale):
+        noise = torch.randn_like(torch.tensor(data)) * position_noise_scale
+        data_noise = data + noise.numpy()
+        return data_noise
+
+    def __getitem__(self, idx: Union[int, np.integer, IndexType]) -> Union['Dataset', Data]:
+        org_data = super().__getitem__(idx)
+        org_atom_num = org_data.pos.shape[0]
+        # change org_data coordinate
+        # get mol
+        mol = MOL_LST[idx.item()]
+
+        # add noise to mol with different types of noise
+        noise_mol, bond_label_lst, angle_label_lst, dihedral_label_lst = add_equi_noise(mol, bond_var=self.bond_length_scale, angle_var=self.angle_noise_scale, torsion_var=self.dihedral_angle_noise_scale)
+
+        # get noise_mol coordinate
+        atom_num = mol.GetNumAtoms()
+        # assert atom_num == org_atom_num # todo, we may need handle such situation
+
+        if atom_num != org_atom_num:
+            print('assert atom_num == org_atom_num failed')
+            atoms = mol.GetAtoms()
+            z_lst = []
+            for i in range(atom_num):
+                atom = atoms[i]
+                z_lst.append(atom.GetAtomicNum()) # atomic num start from 1
+            
+            org_data.z = torch.tensor(z_lst) # atomic num start from 1
+
+
+        # get coordinates
+        coords = np.zeros((atom_num, 3), dtype=np.float32)
+        coord_conf = noise_mol.GetConformer()
+        for idx in range(atom_num):
+            c_pos = coord_conf.GetAtomPosition(idx)
+            coords[idx] = [float(c_pos.x), float(c_pos.y), float(c_pos.z)]
+        # coords = mol.GetConformer().GetPositions()
+
+        # set coordinate to atom
+        org_data.pos = torch.tensor(coords)
+        org_data.bond_target = torch.tensor(bond_label_lst)
+        org_data.angle_target = torch.tensor(angle_label_lst)
+        org_data.dihedral_target = torch.tensor(dihedral_label_lst)
+
+        return org_data
 
 # equilibrium
 EQ_MOL_LST = None

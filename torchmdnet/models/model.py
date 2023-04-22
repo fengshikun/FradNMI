@@ -88,9 +88,22 @@ def create_model(args, prior_model=None, mean=None, std=None):
     # create the denoising output network
     output_model_noise = None
     if args['output_model_noise'] is not None:
-        output_model_noise = getattr(output_modules, output_prefix + args["output_model_noise"])(
-            args["embedding_dimension"], args["activation"],
-        )
+        if args['bond_length_scale']:
+            output_bond_noise = getattr(output_modules, output_prefix + args["output_model_noise"])(
+                args["embedding_dimension"] * 2, args["activation"],
+            )
+            output_angle_noise = getattr(output_modules, output_prefix + args["output_model_noise"])(
+                args["embedding_dimension"] * 2, args["activation"],
+            )
+            output_dihedral_noise = getattr(output_modules, output_prefix + args["output_model_noise"])(
+                args["embedding_dimension"], args["activation"],
+            )
+            output_model_noise = nn.ModuleList([output_bond_noise, output_angle_noise, output_dihedral_noise])
+
+        else:
+            output_model_noise = getattr(output_modules, output_prefix + args["output_model_noise"])(
+                args["embedding_dimension"], args["activation"],
+            )
     
     output_model_mask_atom = None 
     if args['mask_atom']:
@@ -110,6 +123,9 @@ def create_model(args, prior_model=None, mean=None, std=None):
         position_noise_scale=args['position_noise_scale'],
         no_target_mean=args['no_target_mean'],
         seperate_noise=args['seperate_noise'],
+        # bond length scale
+        bond_length_scale=args['bond_length_scale'],
+        
     )
     return model
 
@@ -159,7 +175,8 @@ class TorchMD_Net(nn.Module):
         position_noise_scale=0.,
         no_target_mean=False,
         seperate_noise=False,
-        output_model_mask_atom=None
+        output_model_mask_atom=None,
+        bond_length_scale=0.,
     ):
         super(TorchMD_Net, self).__init__()
         self.representation_model = representation_model
@@ -182,6 +199,8 @@ class TorchMD_Net(nn.Module):
         self.no_target_mean = no_target_mean
         self.seperate_noise = seperate_noise
 
+        self.bond_length_scale = bond_length_scale
+
         self.output_model_mask_atom = output_model_mask_atom
 
         mean = torch.scalar_tensor(0) if mean is None else mean
@@ -194,6 +213,20 @@ class TorchMD_Net(nn.Module):
         else:
             self.pos_normalizer = None
 
+        if self.bond_length_scale > 0 and not self.no_target_mean:
+            self.bond_pos_normalizer = AccumulatedNormalization(accumulator_shape=(1,))
+            self.angle_pos_normalizer = AccumulatedNormalization(accumulator_shape=(1,))
+            self.dihedral_pos_normalizer = AccumulatedNormalization(accumulator_shape=(1,))
+            # TODO: self.output_model_noise: List
+            hidden_channels = self.representation_model.hidden_channels
+
+            self.angle_ijk_proj = nn.Linear(hidden_channels * 3, hidden_channels * 2)
+            self.dihedral_jk_proj = nn.Linear(hidden_channels * 2, hidden_channels)
+        else:
+            self.bond_pos_normalizer = None
+            self.angle_pos_normalizer = None
+            self.dihedral_pos_normalizer = None
+
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -202,7 +235,7 @@ class TorchMD_Net(nn.Module):
         if self.prior_model is not None:
             self.prior_model.reset_parameters()
 
-    def forward(self, z, pos, batch: Optional[torch.Tensor] = None):
+    def forward(self, z, pos, batch: Optional[torch.Tensor] = None, batch_org = None):
         assert z.dim() == 1 and z.dtype == torch.long
         batch = torch.zeros_like(z) if batch is None else batch
 
@@ -223,13 +256,61 @@ class TorchMD_Net(nn.Module):
             mask_logits = self.output_model_mask_atom.pre_reduce(x)
 
 
+        
+        if self.bond_length_scale > 0:
+            # collect bond featrue
+            bond_idx = batch_org.bond_target[:, :2].to(torch.long)
+            bond_i_x = x[bond_idx[:, 0]]
+            bond_j_x = x[bond_idx[:, 1]]
+            bond_i_v = v[bond_idx[:, 0]]
+            bond_j_v = v[bond_idx[:, 1]]
+
+            # concat i and j
+            bond_x = torch.cat([bond_i_x, bond_j_x], axis=1) # X * 512
+            bond_v = torch.cat([bond_i_v, bond_j_v], axis=2) # X * 512
+            
+            # collect angle featrue
+            angle_idx = batch_org.angle_target[:, :3].to(torch.long)
+            angle_i_x = x[angle_idx[:, 0]]
+            angle_j_x = x[angle_idx[:, 1]]
+            angle_k_x = x[angle_idx[:, 2]]
+            angle_x = self.angle_ijk_proj(torch.cat([angle_i_x, angle_j_x, angle_k_x], axis=1))    
+            
+            angle_i_v = v[angle_idx[:, 0]]
+            angle_j_v = v[angle_idx[:, 1]]
+            angle_k_v = v[angle_idx[:, 2]]
+
+            angle_ji_v = angle_i_v - angle_j_v # TODO direction?
+            angle_jk_v = angle_k_v - angle_j_v # TODO direction?
+            angle_v = torch.cat([angle_ji_v, angle_jk_v], axis=2)
+        
+            # collect dihedral featrue
+            dihedral_idx = batch_org.dihedral_target[:, 1:3].to(torch.long)
+            # only pick j,k
+            dihedral_j_x = x[dihedral_idx[:, 0]]
+            dihedral_k_x = x[dihedral_idx[:, 1]]
+            dihedral_x = self.dihedral_jk_proj(torch.cat([dihedral_j_x, dihedral_k_x], axis=1))
+            
+            dihedral_j_v = v[dihedral_idx[:, 0]]
+            dihedral_k_v = v[dihedral_idx[:, 1]]
+            dihedral_v = dihedral_k_v - dihedral_j_v # TODO direction?
+
+            
+
+
         # predict noise
         noise_pred = None
         if self.output_model_noise is not None:
             if nv is not None:
                 noise_pred = self.output_model_noise.pre_reduce(x, nv, z, pos, batch)
             else:
-                noise_pred = self.output_model_noise.pre_reduce(x, v, z, pos, batch)
+                if self.bond_length_scale > 0:
+                    bond_noise_pred = self.output_model_noise[0].pre_reduce(bond_x, bond_v, z, pos, batch).mean(axis=1)
+                    angle_noise_pred = self.output_model_noise[1].pre_reduce(angle_x, angle_v, z, pos, batch).mean(axis=1)
+                    dihedral_noise_pred = self.output_model_noise[2].pre_reduce(dihedral_x, dihedral_v, z, pos, batch).mean(axis=1)
+                    noise_pred = [bond_noise_pred, angle_noise_pred, dihedral_noise_pred]
+                else:
+                    noise_pred = self.output_model_noise.pre_reduce(x, v, z, pos, batch)
 
         # apply the output network
         x = self.output_model.pre_reduce(x, v, z, pos, batch)

@@ -85,7 +85,11 @@ def get_args():
     parser.add_argument('--seperate-noise', type=bool, default=False, help='seperate noise.')
 
 
-    parser.add_argument('--dihedral-angle-noise-scale', default=0., type=float, help='Weighting factor for denoising in the loss function.')
+    parser.add_argument('--dihedral-angle-noise-scale', default=0., type=float, help='dihedral angle noise.')
+
+    parser.add_argument('--angle-noise-scale', default=0., type=float, help='angle noise scale.')
+    parser.add_argument('--bond-length-scale', default=0., type=float, help='bond length scale.')
+
     parser.add_argument('--composition', type=bool, default=False, help='violate conformation rules or not.')
 
     parser.add_argument('--equilibrium', type=bool, default=False, help='equilibrium.')

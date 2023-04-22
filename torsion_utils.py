@@ -3,7 +3,9 @@ from rdkit.Chem import rdMolTransforms
 import copy
 from collections import defaultdict
 import collections
-
+import random
+import numpy as np
+import math
 
 def get_torsions(mol_list):
     atom_counter = 0
@@ -68,6 +70,31 @@ def apply_changes(mol, values, rotable_bonds):
 
     return opt_mol
 
+
+
+def GetBondLength(conf, atom_idx):
+    return rdMolTransforms.GetBondLength(conf, atom_idx[0], atom_idx[1])
+
+def SetBondLength(conf, atom_idx, new_vale):
+    return rdMolTransforms.SetBondLength(conf, atom_idx[0], atom_idx[1], new_vale)
+
+def GetAngle(conf, atom_idx):
+    return rdMolTransforms.GetAngleDeg(conf, atom_idx[0], atom_idx[1], atom_idx[2])
+
+def SetAngle(conf, atom_idx, new_vale):
+    return rdMolTransforms.SetAngleDeg(conf, atom_idx[0], atom_idx[1], atom_idx[2], new_vale)
+
+
+def apply_changes_bond_length(mol, values, bond_idx):
+    opt_mol = copy.deepcopy(mol)
+    [SetBondLength(opt_mol.GetConformer(), bond_idx[r], values[r]) for r in range(len(bond_idx))]
+    return opt_mol
+
+def apply_changes_angle(mol, values, bond_idx):
+    opt_mol = copy.deepcopy(mol)
+    [SetAngle(opt_mol.GetConformer(), bond_idx[r], values[r]) for r in range(len(bond_idx))]
+
+    return opt_mol
 
 # input: mol (rdkit) object; rotate_bonds list
 # return: rotate_bonds order(list, each rotate bond maybe reverse), and depth
@@ -168,8 +195,124 @@ def get_rotate_order_info(mol, rotate_bonds):
     root_idx = sorted(rg_graph_w_s.items(), key=lambda kv: (len(kv[1][0]), kv[1][1]))[0][0]
     return bfs(rg_graph, root_idx, edge_rotate_bond_dict, rotate_bonds, rg_nodes)
 
+
+def add_equi_noise(opt_mol, bond_var=0.04, angle_var=0.04, torsion_var=2):
+    # bond noise, find all bond add noise
+    mol = copy.deepcopy(opt_mol)
+    conf = mol.GetConformer()
+    bond_label_lst = [] # [i, j, delta_len]
+    for bond in mol.GetBonds():
+        i_idx = bond.GetBeginAtomIdx()
+        j_idx = bond.GetEndAtomIdx()
+        if mol.GetAtomWithIdx(i_idx).IsInRing() and mol.GetAtomWithIdx(j_idx).IsInRing():
+            continue
+
+        org_bond_len = GetBondLength(conf, [i_idx, j_idx])
+        # add gaussian noise:
+        noise_bond_len = np.random.normal(loc=org_bond_len, scale=bond_var)
+        # set bond_length
+        SetBondLength(conf, [i_idx, j_idx], noise_bond_len)
+        bond_label_lst.append([i_idx, j_idx, noise_bond_len - org_bond_len])
+
+    # angle noise
+    angle_label_lst = [] # [i, j, k, delta_angle]
+    for atom in mol.GetAtoms(): # j
+        j_idx = atom.GetIdx()
+        # atom_symbol = atom.GetSymbol()
+        atom_degree = atom.GetDegree()
+        if atom_degree >= 2:
+            # get neighbors
+            neighbors = atom.GetNeighbors()
+            neb_lst = []
+            for neb in neighbors:
+                neb_lst.append(neb.GetIdx())
+            # random pick one as i
+            i_idx = random.choice(neb_lst)
+            neb_lst.remove(i_idx)
+            # iterate k
+            for k_idx in neb_lst:
+                # judge (i, j) and (j, k) in ring:
+                if mol.GetAtomWithIdx(i_idx).IsInRing() and mol.GetAtomWithIdx(j_idx).IsInRing() and mol.GetAtomWithIdx(k_idx).IsInRing():
+                    continue
+                # add angle noise to (i, j, k)
+                org_angle = GetAngle(conf, [i_idx, j_idx, k_idx])
+                if math.isnan(org_angle): # may be nan
+                    continue
+                # add noise
+                noise_angle = np.random.normal(loc=org_angle, scale=angle_var)
+                SetAngle(conf, [i_idx, j_idx, k_idx], noise_angle)
+                angle_label_lst.append([i_idx, j_idx, k_idx, noise_angle - org_angle])
+    
+    # dihedral angle(rotatable or not) [i, j, k, l]
+    # get the all the rotatable angel idx
+    rotable_bonds = get_torsions([mol]) # format like [(0, 5, 10, 7), (1, 6, 12, 11), (6, 12, 11, 4)]
+    
+    rotable_sets = set([])
+    for rb in rotable_bonds:
+        rotable_sets.add(f'{rb[1]}_{rb[2]}')
+        rotable_sets.add(f'{rb[2]}_{rb[1]}')
+
+    dihedral_label_lst = [] # [i, j, k, l, delta_angle]
+    for bond in mol.GetBonds():
+        j_idx = bond.GetBeginAtomIdx()
+        k_idx = bond.GetEndAtomIdx()
+        # check (j_idx, k_idx) in ring or not
+        if mol.GetAtomWithIdx(j_idx).IsInRing() and mol.GetAtomWithIdx(k_idx).IsInRing():
+            continue
+        
+        j_atom = mol.GetAtomWithIdx(j_idx)
+        j_atom_degree = j_atom.GetDegree()
+        k_atom = mol.GetAtomWithIdx(k_idx)
+        k_atom_degree = k_atom.GetDegree()
+
+        if j_atom_degree < 2 or k_atom_degree < 2: # cannot compose a dihedral angle
+            continue
+
+        # get neibors
+        j_neighbors = j_atom.GetNeighbors()
+        j_neb_lst = []
+        for neb in j_neighbors:
+            j_neb_lst.append(neb.GetIdx())
+        j_neb_lst.remove(k_idx)
+
+        k_neighbors = k_atom.GetNeighbors()
+        k_neb_lst = []
+        for neb in k_neighbors:
+            k_neb_lst.append(neb.GetIdx())
+        k_neb_lst.remove(j_idx)
+
+        # random pick one neighbor from j and k, taken as i, l
+        i_idx = random.choice(j_neb_lst)
+        l_idx = random.choice(k_neb_lst)
+
+        if f'{j_idx}_{k_idx}' in rotable_sets: # rotatable
+            deh_var = torsion_var
+        else:
+            deh_var = angle_var
+        
+        # add noise
+        org_deh_angle = GetDihedral(conf, [i_idx, j_idx, k_idx, l_idx])
+        if math.isnan(org_deh_angle): # may be nan
+            continue
+        noise_deh_angle = np.random.normal(loc=org_deh_angle, scale=deh_var)
+        SetDihedral(conf, [i_idx, j_idx, k_idx, l_idx], noise_deh_angle)
+        dihedral_label_lst.append([i_idx, j_idx, k_idx, l_idx, noise_deh_angle - org_deh_angle])
+    
+    return mol, bond_label_lst, angle_label_lst, dihedral_label_lst
+
+
 if __name__ == "__main__":
+    from tqdm import tqdm
     mol = Chem.SDMolSupplier('org_2.sdf')[0]
     rotate_bonds = get_torsions([mol])
     print(rotate_bonds)
     print(get_rotate_order_info(mol, rotate_bonds))
+    dm = np.load('dihmol.npy', allow_pickle=True)[0]
+    noise_mol, bond_label_lst, angle_label_lst, dihedral_label_lst = add_equi_noise(dm)
+    # MOL_LST = np.load("h_mol_lst.npy", allow_pickle=True)
+    # for mol in tqdm(MOL_LST):
+    #     noise_mol, bond_label_lst, angle_label_lst, dihedral_label_lst = add_equi_noise(mol)
+    #     dihedral_label = np.array(dihedral_label_lst)
+    #     if np.isnan(dihedral_label).sum():
+    #         import pdb; pdb.set_trace()
+    #         print('nan happens!')

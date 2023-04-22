@@ -33,6 +33,10 @@ class LNNP(LightningModule):
 
         if self.hparams.mask_atom:
             self.criterion = torch.nn.CrossEntropyLoss()
+        
+        self.bond_length_scale = self.hparams.bond_length_scale
+        if self.bond_length_scale > 0:
+            pass
 
     def configure_optimizers(self):
         optimizer = AdamW(
@@ -65,8 +69,8 @@ class LNNP(LightningModule):
             raise ValueError(f"Unknown lr_schedule: {self.hparams.lr_schedule}")
         return [optimizer], [lr_scheduler]
 
-    def forward(self, z, pos, batch=None):
-        return self.model(z, pos, batch=batch)
+    def forward(self, z, pos, batch=None, batch_org=None):
+        return self.model(z, pos, batch=batch, batch_org=batch_org)
 
     def training_step(self, batch, batch_idx):
         if self.train_loss_type == 'smooth_l1_loss':
@@ -87,6 +91,24 @@ class LNNP(LightningModule):
         # return res
         return self.step(batch, l1_loss, "test")
 
+
+    def process_batch_idx(self, batch):
+        # process the idx of bond_target, angle_target and dihedral_target.
+        batch_info = batch['batch']
+        batch_num = batch._num_graphs
+
+        slice_dict = batch._slice_dict
+        bond_target_indx = slice_dict['bond_target']
+        angle_target_indx = slice_dict['angle_target']
+        dihedral_target_indx = slice_dict['dihedral_target']
+        for i in range(batch_num):
+            cur_num = slice_dict['pos'][i] # add to bond idx
+            
+            batch.bond_target[bond_target_indx[i]:bond_target_indx[i+1]][:, :2] += cur_num
+            batch.angle_target[angle_target_indx[i]:angle_target_indx[i+1]][:, :3] += cur_num
+            batch.dihedral_target[dihedral_target_indx[i]:dihedral_target_indx[i+1]][:, :4] += cur_num
+        
+
     def step(self, batch, loss_fn, stage):
         with torch.set_grad_enabled(stage == "train" or self.hparams.derivative):
             # TODO: the model doesn't necessarily need to return a derivative once
@@ -98,9 +120,15 @@ class LNNP(LightningModule):
                     pred, _, deriv = self(batch.z, batch.org_pos, batch.batch)
                     _, noise_pred, _ = self(batch.z, batch.pos, batch.batch)
                 else:
-                    pred, noise_pred, deriv = self(batch.z, batch.pos, batch.batch)
+                
+                    if self.bond_length_scale > 0:
+                        self.process_batch_idx(batch)
+                        pred, noise_pred, deriv = self(batch.z, batch.pos, batch.batch, batch_org=batch)
+                    else:
+                        pred, noise_pred, deriv = self(batch.z, batch.pos, batch.batch)
 
-        denoising_is_on = ("pos_target" in batch) and (self.hparams.denoising_weight > 0) and (noise_pred is not None)
+        denoising_is_on = ("pos_target" in batch or "bond_target" in batch) and (self.hparams.denoising_weight > 0) and (noise_pred is not None)
+
 
         loss_y, loss_dy, loss_pos, mask_atom_loss = 0, 0, 0, 0
 
@@ -169,8 +197,11 @@ class LNNP(LightningModule):
 
         if denoising_is_on:
             if "y" not in batch:
+                if isinstance(noise_pred, list): # bond angle dihedral
+                    noise_pred = [ele + pred.sum() * 0 for ele in noise_pred]
+                else:
                 # "use" both outputs of the model's forward (see comment above).
-                noise_pred = noise_pred + pred.sum() * 0
+                    noise_pred = noise_pred + pred.sum() * 0
             
             def weighted_mse_loss(input, target, weight):
                 return (weight.reshape(-1, 1).repeat((1, 3)) * (input - target) ** 2).mean()
@@ -189,13 +220,28 @@ class LNNP(LightningModule):
                     loss_pos = loss_fn(noise_pred, normalized_pos_target, weights)
                 else:
                     loss_pos = loss_fn(noise_pred, normalized_pos_target)
+                self.losses[stage + "_pos"].append(loss_pos.detach())
+            elif self.model.bond_pos_normalizer is not None:
+                # bond, angle, dihedral
+                normalized_bond_target = self.model.bond_pos_normalizer(batch.bond_target[:,-1])
+                normalized_angle_target = self.model.angle_pos_normalizer(batch.angle_target[:,-1])
+                normalized_dihedral_target = self.model.dihedral_pos_normalizer(batch.dihedral_target[:,-1])
+                loss_bond = loss_fn(noise_pred[0], normalized_bond_target)
+                loss_angle = loss_fn(noise_pred[1], normalized_angle_target)
+                loss_dihedral = loss_fn(noise_pred[2], normalized_dihedral_target)
+                self.losses[stage + "_bond"].append(loss_bond.detach())
+                self.losses[stage + "_angle"].append(loss_angle.detach())
+                self.losses[stage + "_dihedral"].append(loss_dihedral.detach())
+                loss_pos = loss_bond + loss_angle + loss_dihedral
+                if loss_pos.isnan().sum().item():
+                    print('loss nan!!!')
             else:
                 if 'wg'in batch.keys:
                     loss_pos = loss_fn(noise_pred, normalized_pos_target, weights)
                 else:
                     loss_pos = loss_fn(noise_pred, normalized_pos_target)
             # loss_pos = loss_fn(noise_pred, normalized_pos_target)
-            self.losses[stage + "_pos"].append(loss_pos.detach())
+                self.losses[stage + "_pos"].append(loss_pos.detach())
 
         # total loss
         loss = loss_y * self.hparams.energy_weight + loss_dy * self.hparams.force_weight + loss_pos * self.hparams.denoising_weight + mask_atom_loss
@@ -322,7 +368,20 @@ class LNNP(LightningModule):
             "test_pos": [],
             "train_mask_atom_loss": [],
             "val_mask_atom_loss": [],
-            "test_mask_atom_loss": []
+            "test_mask_atom_loss": [],
+            
+            "train_bond": [],
+            "val_bond": [],
+            "test_bond": [],
+
+            "train_angle": [],
+            "val_angle": [],
+            "test_angle": [],
+
+            "train_dihedral": [],
+            "val_dihedral": [],
+            "test_dihedral": [],
+
         }
 
     def _reset_ema_dict(self):
