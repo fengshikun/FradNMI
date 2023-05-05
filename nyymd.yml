@@ -1,0 +1,5 @@
+iter_time: 3
+bond_var: 0.1
+angle_var: 0
+dih_var_rigid: 0
+torsion_var: 0

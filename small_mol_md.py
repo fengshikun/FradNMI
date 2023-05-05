@@ -1,7 +1,12 @@
 	
 #small_mol_md.py
+# python small_mol_md.py --add-noise
+# python small_mol_md.py --rdkit-gen true --rdkit-opt true
+# python small_mol_md.py --rdkit-gen true --rdkit-opt false
+# python small_mol_md.py
 import yaml
 import sys
+import copy
 import os
 import time
 import matplotlib.pyplot as plt
@@ -15,6 +20,11 @@ from simtk import unit
 from rdkit import Chem
 import numpy as np
 from openmm.unit import kilojoules, mole, nanometer
+import argparse
+from rdkit.Chem import AllChem
+from torsion_utils import add_equi_noise
+import os
+os.environ['CUDA_PATH'] = '/usr/local/cuda'
 
 class ForceReporter(object):
     def __init__(self, file, reportInterval):
@@ -44,13 +54,15 @@ def run_md(molecule, confId=0, save_prefix=0):
     temperature = config["temperature"] * unit.kelvin
     friction = 1 / unit.picosecond
 
+    # platform = openmm.Platform.getPlatformByName('CUDA')
+
     # TODO fix params
     integrator = openmm.LangevinIntegrator(temperature, friction, time_step)
      
     conf = molecule.conformers[confId]
     simulation = openmm.app.Simulation(omm_topology,
                                        system,
-                                       integrator)
+                                       integrator) # platform
     simulation.context.setPositions(conf)
     if not os.path.isdir('./log'):
         os.mkdir('./log')
@@ -64,18 +76,51 @@ def run_md(molecule, confId=0, save_prefix=0):
     simulation.reporters.append(pdb_reporter)
     simulation.reporters.append(state_data_reporter)
 
-    simulation.reporters.append(ForceReporter(f'forces_{save_prefix}.txt', 10))
+    simulation.reporters.append(ForceReporter(f'./log/forces_{save_prefix}.txt', 10))
     start = time.process_time()
     simulation.step(config["num_steps"])
     end = time.process_time()
     print(f"Elapsed time {end-start:.2f} sec")
     print("Done")
- 
+
+
+def rdkit_gen_mol(mol, rdkit_opt=False):
+    test_mol = copy.copy(mol)
+    test_mol.RemoveConformer(0)
+    cids = AllChem.EmbedMultipleConfs(test_mol, numConfs=1, numThreads=8, pruneRmsThresh=0.1, maxAttempts=5, useRandomCoords=False)
+    if len(cids) < 1:
+        print('Rdkit generate fail')
+        return mol        
+    else: # success
+        print('Rdkit generate success')
+        if rdkit_opt:
+            print('Optimising...')
+            AllChem.MMFFOptimizeMoleculeConfs(test_mol, numThreads=8)
+        return test_mol
+
+
+
+
+
+#TODO Consider calling AddHs()
 if __name__=="__main__":
+    parser = argparse.ArgumentParser(description='MOLECULE MD')
+    parser.add_argument('--rdkit-gen', default=False, type=bool, help='if true, use rdkit generate conformation')
+    parser.add_argument('--rdkit-opt', default=False, type=bool, help='if true, use rdkit force field optimization, only valid when')
+    parser.add_argument('--add-noise', default=False, type=bool, help='if true, add noise')
+    args = parser.parse_args()
+    rdkit_gen = args.rdkit_gen
+    rdkit_opt = args.rdkit_opt
+
+    add_noise = args.add_noise
+
     forcefield = ForceField("openff-1.0.0.offxml")
     config = yaml.load(open("mdconf.yml", "r"), yaml.Loader)
     # molecule = Molecule.from_smiles(sys.argv[1])
     
+    
+
+
     MOL_LST = np.load("h_mol_lst.npy", allow_pickle=True)
     
     log_num = 10
@@ -83,6 +128,17 @@ if __name__=="__main__":
 
     for i in range(log_num):
         rd_mol = MOL_LST[i]
+        if rdkit_gen:
+            rd_mol = rdkit_gen_mol(rd_mol, rdkit_opt=rdkit_opt)
+        
+        if add_noise:
+            rd_mol, bond_label_lst, angle_label_lst, dihedral_label_lst = add_equi_noise(rd_mol, bond_var=0.04, angle_var=0.04, torsion_var=20)
         molecule = Molecule.from_rdkit(rd_mol)
         # molecule.generate_conformers()
-        run_md(molecule, save_prefix=i)
+        if rdkit_gen:
+            save_prefix = f"rdkit_opt_{rdkit_opt}_{i}"
+        else:
+            save_prefix = f"{i}"
+        if add_noise:
+            save_prefix += f'_add_noise'
+        run_md(molecule, save_prefix=save_prefix)

@@ -1,0 +1,6 @@
+time_step: 2
+temperature: 300
+friction: 1
+trj_freq: 1
+data_freq: 1
+num_steps: 1000
