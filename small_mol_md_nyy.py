@@ -520,6 +520,7 @@ if __name__=="__main__":
     npy_file = '/share/project/sharefs-skfeng/xyz2mol/aspirin_4w.npy'
     asp_4w = np.load(npy_file,allow_pickle=True)
     rd_mol = asp_4w[0]
+    print(rd_mol)
     equi_mol = Molecule.from_rdkit(rd_mol)
     topology = Topology.from_molecules(molecules=[equi_mol])
     system = forcefield.create_openmm_system(topology)

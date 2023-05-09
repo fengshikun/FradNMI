@@ -15,7 +15,7 @@ from openforcefield.typing.engines.smirnoff import ForceField
 from rdkit import Chem
 from torsion_utils import get_torsions, GetDihedral
 import numpy as np
-from openmm.unit import kilojoules, mole, nanometer
+# from openmm.unit import kilojoules, mole, nanometer
 # from torchmdnet.datasets import MD17
 import copy 
 import pickle
@@ -148,6 +148,7 @@ def add_equi_noise_and_calculate_force(opt_mol, para, bond_var=0.1, angle_var=2,
     Natoms = mol.GetNumAtoms()
     bond_label_lst = [] # [i, j, delta_len]
     atomic_force_dict = {} #{'atom index': atomic force vector}
+    atomic_force_dict_n = {}
     bond_vec_dict = {} #{'(BeginAtomIdx,EndAtomIdx)':unit direction vector of the bond}
     
 # add noise
@@ -198,8 +199,11 @@ def add_equi_noise_and_calculate_force(opt_mol, para, bond_var=0.1, angle_var=2,
             # for k_idx in neb_lst:
                 # judge (i, j) and (j, k) in ring:
                 # print(i_idx,j_idx,k_idx)
-            if mol.GetAtomWithIdx(i_idx).IsInRing() and mol.GetAtomWithIdx(j_idx).IsInRing() and mol.GetAtomWithIdx(k_idx).IsInRing():
-                continue
+            #NOTE modifieed ring setting
+            # if mol.GetAtomWithIdx(i_idx).IsInRing() and mol.GetAtomWithIdx(j_idx).IsInRing() and mol.GetAtomWithIdx(k_idx).IsInRing():
+            #     continue
+            if mol.GetAtomWithIdx(i_idx).IsInRing() + mol.GetAtomWithIdx(j_idx).IsInRing() + mol.GetAtomWithIdx(k_idx).IsInRing() >1:
+                 continue
                 # get original angle (i, j, k)
             org_angle = GetAngle(conf, [i_idx, j_idx, k_idx])
 
@@ -210,7 +214,7 @@ def add_equi_noise_and_calculate_force(opt_mol, para, bond_var=0.1, angle_var=2,
             SetAngle(conf, [i_idx, j_idx, k_idx], noise_angle)#fix ij, move k
             angle_label_lst.append([i_idx, j_idx, k_idx, noise_angle - org_angle])
     # print(angle_label_lst)
-    # org_angle= GetAngle(conf, [10, 9,13])
+    # org_angle= GetAngle(conf, [10, 9,13])  #NOTE SET ANGLE
     # SetAngle(conf, [10, 9,13], org_angle+2)
     # angle_label_lst.append([10, 9,13, 2])
     
@@ -271,7 +275,10 @@ def add_equi_noise_and_calculate_force(opt_mol, para, bond_var=0.1, angle_var=2,
     opt_conf = opt_mol.GetConformer()    #opt_conf is of equilibrium， conf is of the noisy one
 
     for idx in range(Natoms):
-        atomic_force_dict[str(idx)]= np.array([0.0,0.0,0.0]) #initialize atomic force        
+        atomic_force_dict[str(idx)]= np.array([0.0,0.0,0.0]) #initialize atomic force 
+    for idx in range(Natoms):
+        atomic_force_dict_n[str(idx)]= np.array([0.0,0.0,0.0]) #initialize atomic force 
+
 #calculate directional vector for all bonds of noisy conf, including that in rings
     for bond in mol.GetBonds():
         i_idx = bond.GetBeginAtomIdx()
@@ -285,11 +292,16 @@ def add_equi_noise_and_calculate_force(opt_mol, para, bond_var=0.1, angle_var=2,
         i_idx = bond_label_lst[i][0]
         j_idx = bond_label_lst[i][1]     
         bond_para = para[0]["Bonds"][(i_idx, j_idx)].k._value
-        bond_force = bond_para * (bond_label_lst[i][2])      
+        para[0]["Bonds"][(i_idx, j_idx)].length._value
+        bond_force = bond_para * (bond_label_lst[i][2])  
+        # #NOTE DONOT USE NOISE
+        bond_force_n = bond_para * (GetBondLength(conf, [i_idx, j_idx]) - para[0]["Bonds"][(i_idx, j_idx)].length._value)     
         vector = bond_vec_dict[str((i_idx, j_idx))]          
         
         atomic_force_dict[str(i_idx)] +=  + vector * bond_force    #   force on the two atoms point to each other if noise len > org len   
-        atomic_force_dict[str(j_idx)] +=  - vector * bond_force        
+        atomic_force_dict[str(j_idx)] +=  - vector * bond_force 
+        atomic_force_dict_n[str(i_idx)] +=  + vector * bond_force_n    #   force on the two atoms point to each other if noise len > org len   
+        atomic_force_dict_n[str(j_idx)] +=  - vector * bond_force_n       
         
     # calculate angle force
     for i in range(len(angle_label_lst)):
@@ -325,6 +337,21 @@ def add_equi_noise_and_calculate_force(opt_mol, para, bond_var=0.1, angle_var=2,
             atomic_force_dict[str(k_idx)] += angle_force * (- (len_ki2 * mycos(GetAngle(conf, [i2_idx, k_idx, j_idx])) * vector_jk + vector_ki2) /(len_kj*len_i2j*mysin(GetAngle(conf, [i2_idx, j_idx, k_idx]))))
             atomic_force_dict[str(j_idx)] += angle_force *  (len_ki2 * mycos(GetAngle(conf, [j_idx, i2_idx, k_idx])) * vector_ji2 + len_ki2 * mycos(GetAngle(conf, [i2_idx, k_idx, j_idx])) * vector_jk) /(len_kj*len_i2j*mysin(GetAngle(conf, [i2_idx, j_idx, k_idx])))
         
+        # #NOTE DONOT USE NOISE
+        angle_force = angle_para * (GetAngle(conf, [i_idx, j_idx, k_idx]) - para[0]["Angles"][(i_idx, j_idx,k_idx)].angle._value)          
+        atomic_force_dict_n[str(i_idx)] += angle_force * (- (len_ki * mycos(GetAngle(conf, [j_idx, i_idx, k_idx])) * vector_ji - vector_ki) /(len_kj*len_ij*mysin(GetAngle(conf, [i_idx, j_idx, k_idx]))))
+        atomic_force_dict_n[str(k_idx)] += angle_force * (- (len_ki * mycos(GetAngle(conf, [i_idx, k_idx, j_idx])) * vector_jk + vector_ki) /(len_kj*len_ij*mysin(GetAngle(conf, [i_idx, j_idx, k_idx]))))
+        atomic_force_dict_n[str(j_idx)] += angle_force *  (len_ki * mycos(GetAngle(conf, [j_idx, i_idx, k_idx])) * vector_ji + len_ki * mycos(GetAngle(conf, [i_idx, k_idx, j_idx])) * vector_jk) /(len_kj*len_ij*mysin(GetAngle(conf, [i_idx, j_idx, k_idx])))
+        for i2_idx in j_neb_lst:
+            vector_ji2=get_vector(conf,i2_idx, j_idx)
+            vector_ki2=get_vector(conf,i2_idx, k_idx)
+            len_i2j=GetBondLength(conf, [i2_idx, j_idx])
+            len_ki2=GetBondLength(conf, [k_idx, i2_idx])
+            atomic_force_dict_n[str(i2_idx)] += angle_force * (- (len_ki2 * mycos(GetAngle(conf, [j_idx, i2_idx, k_idx])) * get_vector(conf,i2_idx, j_idx) - get_vector(conf,i2_idx, k_idx)) /(len_kj*GetBondLength(conf, [i2_idx, j_idx])*mysin(GetAngle(conf, [i2_idx, j_idx, k_idx]))))
+            atomic_force_dict_n[str(k_idx)] += angle_force * (- (len_ki2 * mycos(GetAngle(conf, [i2_idx, k_idx, j_idx])) * vector_jk + vector_ki2) /(len_kj*len_i2j*mysin(GetAngle(conf, [i2_idx, j_idx, k_idx]))))
+            atomic_force_dict_n[str(j_idx)] += angle_force *  (len_ki2 * mycos(GetAngle(conf, [j_idx, i2_idx, k_idx])) * vector_ji2 + len_ki2 * mycos(GetAngle(conf, [i2_idx, k_idx, j_idx])) * vector_jk) /(len_kj*len_i2j*mysin(GetAngle(conf, [i2_idx, j_idx, k_idx])))
+        
+
     # calculate dihedral angle force 
     for i in range(len(dihedral_label_lst)):
         if dih_var_rigid==0 and torsion_var==0 :
@@ -363,8 +390,8 @@ def add_equi_noise_and_calculate_force(opt_mol, para, bond_var=0.1, angle_var=2,
         
         # vector = np.cross(bond_vec_dict[str((j_idx, k_idx))],get_vector(conf,l_idx, k_idx) ) # vec(k->j)cross vec(k->k_side)
         # atomic_force_dict[str(l_idx)] =  atomic_force_dict[str(l_idx)] + vector_sign_l * vector * dih_angle_force
-    #    
-    return mol, atomic_force_dict
+    save_conf(mol,conf,'bond_var='+str(bond_var)+'_'+'angle_var='+str(angle_var)+'_'+ 'dih_var_rigid='+str(dih_var_rigid)+'_'+'torsion_var='+ str(torsion_var)+'_aspirin')    
+    return mol, atomic_force_dict, atomic_force_dict_n
 
 def calculate_dft_force(mol):
     # get dft input: atom type and coordinate
@@ -384,8 +411,8 @@ def calculate_dft_force(mol):
     #dft calculate force 
     mol_hf = gto.M(atom = noisy_atom_coord, basis = '6-31g', symmetry = True)
     mf_hf = dft.RKS(mol_hf)
-    # mf_hf.xc = 'b3lyp'
-    mf_hf.xc = 'pbe'
+    mf_hf.xc = 'b3lyp'
+    # mf_hf.xc = 'pbe'
     energy = mf_hf.kernel()
     g_2 = mf_hf.nuc_grad_method() 
     force = g_2.kernel()
@@ -436,6 +463,11 @@ def calcuate_dft_gpu(elements, new_pos):
 def calculate_mean_correlation(array_1,array_2):    
     res = pearsonr(array_1.flatten(), array_2.flatten())
     return res
+
+from sklearn.metrics import mean_squared_error
+def calculate_mse(array_1,array_2):    
+    mse = mean_squared_error(array_1.flatten(), array_2.flatten())
+    return mse
 
 def calculate_equivariant_distance(array_1,array_2):
     #center at zero
@@ -510,30 +542,46 @@ def add_coord_noise_get_Frad_force(opt_mol, coord_var=0.04, dihedral_var=2):
     return mol, atomic_force_dict
     
 
-def experiment(rd_mol, ff_applied_parameters,bond_var, angle_var, dih_var_rigid, torsion_var):
+def experiment(dft_force_0,rd_mol, ff_applied_parameters,bond_var, angle_var, dih_var_rigid, torsion_var):
     rho=[]
     equiv_rho=[]
     equiv_pvalue=[]
     pvalue=[]
     for t in range(1):
         # new_mol, atomic_force_dict = add_equi_noise_and_calculate_force(rd_mol, ff_applied_parameters, config['bond_var'], config['angle_var'], config['dih_var_rigid'], config['torsion_var'])#1:20:200
-        new_mol, atomic_force_dict = add_equi_noise_and_calculate_force(rd_mol, ff_applied_parameters, bond_var, angle_var, dih_var_rigid, torsion_var)#1:20:200
+        new_mol, atomic_force_dict,atomic_force_dict_n = add_equi_noise_and_calculate_force(rd_mol, ff_applied_parameters, bond_var, angle_var, dih_var_rigid, torsion_var)#1:20:200
         atomic_force_lst = list(atomic_force_dict.values()) 
-        print(*atomic_force_lst, sep="\n") 
-        dft_force = calculate_dft_force_gpu(new_mol)
+        atomic_force_lst_n = list(atomic_force_dict_n.values()) 
+        # print(*atomic_force_lst, sep="\n") 
+        dft_force = calculate_dft_force(new_mol) - dft_force_0
         # dft_force = calculate_dft_force(new_mol)  
         dft_force_unit = dft_force * (627.5/0.53)
-        v_rho, v_pvalue = calculate_mean_correlation(dft_force_unit,np.asarray(atomic_force_lst))
-        rho.append(v_rho)
-        pvalue.append(v_pvalue)
-        v_rho, v_pvalue = calculate_equivariant_distance(dft_force_unit,np.asarray(atomic_force_lst))
-        equiv_rho.append(v_rho)
-        equiv_pvalue.append(v_pvalue)
-    print('rho:',np.mean(rho),'pvalue:',np.mean(pvalue))
-    print('equiv_rho:',np.mean(equiv_rho),'pvalue:',np.mean(equiv_pvalue))
-    print('--------------')
-    print('rho:',rho,'pvalue:',pvalue)
-    print('equiv_rho:',equiv_rho,'pvalue:',equiv_pvalue)
+        # print(dft_force_unit)
+        # print((dft_force+ dft_force_0) * (627.5/0.53))
+        print('calculate_mean_correlation(dft_force_unit,np.asarray(atomic_force_lst))\n',calculate_mean_correlation(dft_force_unit,np.asarray(atomic_force_lst)))
+        print('calculate_mean_correlation((dft_force+dft_force_0)* (627.5/0.53),np.asarray(atomic_force_lst))\n',calculate_mean_correlation((dft_force+dft_force_0)* (627.5/0.53),np.asarray(atomic_force_lst)))
+        print('calculate_mean_correlation(dft_force_unit,np.asarray(atomic_force_lst_n))\n',calculate_mean_correlation(dft_force_unit,np.asarray(atomic_force_lst_n)))
+        print('calculate_mean_correlation((dft_force+dft_force_0)* (627.5/0.53),np.asarray(atomic_force_lst_n))\n',calculate_mean_correlation((dft_force+dft_force_0)* (627.5/0.53),np.asarray(atomic_force_lst_n)))
+        print('calculate_mean_correlation((dft_force_0)* (627.5/0.53),np.asarray(atomic_force_lst))\n',calculate_mean_correlation((dft_force)* (627.5/0.53),np.asarray(atomic_force_lst)))
+        print('calculate_mse(dft_force_unit,np.asarray(atomic_force_lst))\n',calculate_mse(dft_force_unit,np.asarray(atomic_force_lst)))
+        print('calculate_mse((dft_force+dft_force_0)* (627.5/0.53),np.asarray(atomic_force_lst))\n',calculate_mse((dft_force+dft_force_0)* (627.5/0.53),np.asarray(atomic_force_lst)))
+        print('calculate_mse(dft_force_unit,np.asarray(atomic_force_lst_n))\n',calculate_mse(dft_force_unit,np.asarray(atomic_force_lst_n)))
+        print('calculate_mse((dft_force+dft_force_0)* (627.5/0.53),np.asarray(atomic_force_lst_n))\n',calculate_mse((dft_force+dft_force_0)* (627.5/0.53),np.asarray(atomic_force_lst_n)))
+        print('calculate_mse((dft_force_0)* (627.5/0.53),np.asarray(atomic_force_lst))\n',calculate_mse((dft_force)* (627.5/0.53),np.asarray(atomic_force_lst)))
+   
+   
+    #     v_rho, v_pvalue = calculate_mean_correlation(dft_force_unit,np.asarray(atomic_force_lst))
+    #     calculate_mean_correlation((dft_force+dft_force_0)* (627.5/0.53),np.asarray(atomic_force_lst))
+    #     rho.append(v_rho)
+    #     pvalue.append(v_pvalue)
+    #     v_rho, v_pvalue = calculate_equivariant_distance(dft_force_unit,np.asarray(atomic_force_lst))
+    #     equiv_rho.append(v_rho)
+    #     equiv_pvalue.append(v_pvalue)
+    # print('rho:',np.mean(rho),'pvalue:',np.mean(pvalue))
+    # print('equiv_rho:',np.mean(equiv_rho),'pvalue:',np.mean(equiv_pvalue))
+    # print('--------------')
+    # print('rho:',rho,'pvalue:',pvalue)
+    # print('equiv_rho:',equiv_rho,'pvalue:',equiv_pvalue)
     return None
 
 def experiment_coord(rd_mol, coord_var=0.04, dihedral_var= 2):
@@ -567,26 +615,26 @@ if __name__=="__main__":
     # ff_applied_parameters = forcefield.label_molecules(topology)
     # config = yaml.load(open("nyymd.yml", "r"), yaml.Loader)
     # print(config)
-    # npy_file = '/share/project/sharefs-skfeng/xyz2mol/aspirin_4w.npy'
-    # asp_4w = np.load(npy_file,allow_pickle=True)
-    # rd_mol = asp_4w[0]
-    MOL_LST = np.load("h_mol_lst.npy", allow_pickle=True)    
-    rd_mol = MOL_LST[10001]
-    writer = Chem.SDWriter('mol_idx_10001.sdf')
-    writer.write(rd_mol)
-    writer.close()
+    npy_file = '/share/project/sharefs-skfeng/xyz2mol/aspirin_4w.npy'
+    asp_4w = np.load(npy_file,allow_pickle=True)
+    rd_mol = asp_4w[0]
+    # MOL_LST = np.load("h_mol_lst.npy", allow_pickle=True)    
+    # rd_mol = MOL_LST[10001]
+    # writer = Chem.SDWriter('mol_idx_10001.sdf')
+    # writer.write(rd_mol)
+    # writer.close()
     # np.save('test_mol.npy', rd_mol)
-    print('Data loading finished.')
-    dft_force = calculate_dft_force_gpu(rd_mol)
-    print(f'dft force is {dft_force}')  
+    # print('Data loading finished.')
+    # dft_force = calculate_dft_force(rd_mol)
+    # print(f'dft force is {dft_force}')  
     equi_mol = Molecule.from_rdkit(rd_mol)    
     topology = Topology.from_molecules(molecules=[equi_mol])
     system = forcefield.create_openmm_system(topology)
     ff_applied_parameters = forcefield.label_molecules(topology)
     
     # experiment_coord(rd_mol, coord_var=0.04, dihedral_var= 2)
-    experiment(rd_mol, ff_applied_parameters,bond_var=0.04, angle_var=2, dih_var_rigid=0, torsion_var=0) #1:0.04~ 100:2
-    # experiment(rd_mol, ff_applied_parameters,bond_var=0, angle_var=2, dih_var_rigid=0, torsion_var=0)
+    # experiment(dft_force,rd_mol, ff_applied_parameters,bond_var=0.04, angle_var=0, dih_var_rigid=0, torsion_var=0) #1:0.04~ 100:2
+    experiment(0,rd_mol, ff_applied_parameters,bond_var=0.08, angle_var=0.4, dih_var_rigid=0.4, torsion_var=20)
     # experiment(rd_mol, ff_applied_parameters,bond_var=0, angle_var=0, dih_var_rigid=2, torsion_var=20)
     # experiment(rd_mol, ff_applied_parameters,bond_var=0.04, angle_var=0.04, dih_var_rigid=0.04, torsion_var=2)
     # experiment(rd_mol, ff_applied_parameters,bond_var=0.1, angle_var=2, dih_var_rigid=0, torsion_var=0)

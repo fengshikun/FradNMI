@@ -89,16 +89,34 @@ def create_model(args, prior_model=None, mean=None, std=None):
     output_model_noise = None
     if args['output_model_noise'] is not None:
         if args['bond_length_scale']:
-            output_bond_noise = getattr(output_modules, output_prefix + args["output_model_noise"])(
+            # output_bond_noise = getattr(output_modules, output_prefix + args["output_model_noise"])(
+            #     args["embedding_dimension"] * 2, args["activation"],
+            # )
+            # output_angle_noise = getattr(output_modules, output_prefix + args["output_model_noise"])(
+            #     args["embedding_dimension"] * 2, args["activation"],
+            # )
+            # output_dihedral_noise = getattr(output_modules, output_prefix + args["output_model_noise"])(
+            #     args["embedding_dimension"], args["activation"],
+            # )
+
+
+            # SIMPLE MLP Scalar head
+            scalar_output_prefix = ''
+            output_bond_noise = getattr(output_modules, scalar_output_prefix + args["output_model_noise"])(
                 args["embedding_dimension"] * 2, args["activation"],
             )
-            output_angle_noise = getattr(output_modules, output_prefix + args["output_model_noise"])(
-                args["embedding_dimension"] * 2, args["activation"],
+            output_angle_noise = getattr(output_modules, scalar_output_prefix + args["output_model_noise"])(
+                args["embedding_dimension"] * 3, args["activation"],
             )
-            output_dihedral_noise = getattr(output_modules, output_prefix + args["output_model_noise"])(
-                args["embedding_dimension"], args["activation"],
+            output_dihedral_noise = getattr(output_modules, scalar_output_prefix + args["output_model_noise"])(
+                args["embedding_dimension"] * 4, args["activation"],
             )
-            output_model_noise = nn.ModuleList([output_bond_noise, output_angle_noise, output_dihedral_noise])
+            output_rotate_dihedral_noise = getattr(output_modules, scalar_output_prefix + args["output_model_noise"])(
+                args["embedding_dimension"] * 4, args["activation"],
+            )
+
+
+            output_model_noise = nn.ModuleList([output_bond_noise, output_angle_noise, output_dihedral_noise, output_rotate_dihedral_noise])
 
         else:
             output_model_noise = getattr(output_modules, output_prefix + args["output_model_noise"])(
@@ -217,6 +235,7 @@ class TorchMD_Net(nn.Module):
             self.bond_pos_normalizer = AccumulatedNormalization(accumulator_shape=(1,))
             self.angle_pos_normalizer = AccumulatedNormalization(accumulator_shape=(1,))
             self.dihedral_pos_normalizer = AccumulatedNormalization(accumulator_shape=(1,))
+            self.rotate_dihedral_pos_normalizer = AccumulatedNormalization(accumulator_shape=(1,))
             # TODO: self.output_model_noise: List
             hidden_channels = self.representation_model.hidden_channels
 
@@ -274,7 +293,8 @@ class TorchMD_Net(nn.Module):
             angle_i_x = x[angle_idx[:, 0]]
             angle_j_x = x[angle_idx[:, 1]]
             angle_k_x = x[angle_idx[:, 2]]
-            angle_x = self.angle_ijk_proj(torch.cat([angle_i_x, angle_j_x, angle_k_x], axis=1))    
+            # angle_x = self.angle_ijk_proj(torch.cat([angle_i_x, angle_j_x, angle_k_x], axis=1))
+            angle_x = torch.cat([angle_i_x, angle_j_x, angle_k_x], axis=1) 
             
             angle_i_v = v[angle_idx[:, 0]]
             angle_j_v = v[angle_idx[:, 1]]
@@ -285,15 +305,34 @@ class TorchMD_Net(nn.Module):
             angle_v = torch.cat([angle_ji_v, angle_jk_v], axis=2)
         
             # collect dihedral featrue
-            dihedral_idx = batch_org.dihedral_target[:, 1:3].to(torch.long)
+            dihedral_idx = batch_org.dihedral_target[:, :4].to(torch.long)
             # only pick j,k
-            dihedral_j_x = x[dihedral_idx[:, 0]]
-            dihedral_k_x = x[dihedral_idx[:, 1]]
-            dihedral_x = self.dihedral_jk_proj(torch.cat([dihedral_j_x, dihedral_k_x], axis=1))
-            
+            dihedral_i_x = x[dihedral_idx[:, 0]]
+            dihedral_j_x = x[dihedral_idx[:, 1]]
+            dihedral_k_x = x[dihedral_idx[:, 2]]
+            dihedral_l_x = x[dihedral_idx[:, 3]]
+            # dihedral_x = self.dihedral_jk_proj(torch.cat([dihedral_j_x, dihedral_k_x], axis=1))
+            dihedral_x = torch.cat([dihedral_i_x, dihedral_j_x, dihedral_k_x, dihedral_l_x], axis=1)
+
+
             dihedral_j_v = v[dihedral_idx[:, 0]]
             dihedral_k_v = v[dihedral_idx[:, 1]]
             dihedral_v = dihedral_k_v - dihedral_j_v # TODO direction?
+
+
+            rotate_dihedral_idx = batch_org.rotate_dihedral_target[:, :4].to(torch.long)
+            # only pick j,k
+            rotate_dihedral_i_x = x[rotate_dihedral_idx[:, 0]]
+            rotate_dihedral_j_x = x[rotate_dihedral_idx[:, 1]]
+            rotate_dihedral_k_x = x[rotate_dihedral_idx[:, 2]]
+            rotate_dihedral_l_x = x[rotate_dihedral_idx[:, 3]]
+            # dihedral_x = self.dihedral_jk_proj(torch.cat([dihedral_j_x, dihedral_k_x], axis=1))
+            rotate_dihedral_x = torch.cat([rotate_dihedral_i_x, rotate_dihedral_j_x, rotate_dihedral_k_x, rotate_dihedral_l_x], axis=1)
+
+
+            rotate_dihedral_j_v = v[rotate_dihedral_idx[:, 0]]
+            rotate_dihedral_k_v = v[rotate_dihedral_idx[:, 1]]
+            rotate_dihedral_v = rotate_dihedral_k_v - rotate_dihedral_j_v # TODO direction?
 
             
 
@@ -308,7 +347,9 @@ class TorchMD_Net(nn.Module):
                     bond_noise_pred = self.output_model_noise[0].pre_reduce(bond_x, bond_v, z, pos, batch).mean(axis=1)
                     angle_noise_pred = self.output_model_noise[1].pre_reduce(angle_x, angle_v, z, pos, batch).mean(axis=1)
                     dihedral_noise_pred = self.output_model_noise[2].pre_reduce(dihedral_x, dihedral_v, z, pos, batch).mean(axis=1)
-                    noise_pred = [bond_noise_pred, angle_noise_pred, dihedral_noise_pred]
+                    rotate_dihedral_noise_pred = self.output_model_noise[3].pre_reduce(rotate_dihedral_x, rotate_dihedral_v, z, pos, batch).mean(axis=1)
+                    
+                    noise_pred = [bond_noise_pred, angle_noise_pred, dihedral_noise_pred, rotate_dihedral_noise_pred]
                 else:
                     noise_pred = self.output_model_noise.pre_reduce(x, v, z, pos, batch)
 

@@ -226,8 +226,16 @@ def add_equi_noise(opt_mol, bond_var=0.04, angle_var=0.04, torsion_var=2):
             neb_lst = []
             for neb in neighbors:
                 neb_lst.append(neb.GetIdx())
-            # random pick one as i
-            i_idx = random.choice(neb_lst)
+
+            if mol.GetAtomWithIdx(j_idx).IsInRing(): # if j in ring, must pick one neb in ring as i
+                for n_idx in neb_lst:
+                    if mol.GetAtomWithIdx(n_idx).IsInRing():
+                        i_idx = n_idx
+                        break
+            else:
+                # j not in ring, random pick one as i
+                i_idx = random.choice(neb_lst)
+            
             neb_lst.remove(i_idx)
             # iterate k
             for k_idx in neb_lst:
@@ -253,7 +261,11 @@ def add_equi_noise(opt_mol, bond_var=0.04, angle_var=0.04, torsion_var=2):
         rotable_sets.add(f'{rb[2]}_{rb[1]}')
 
     dihedral_label_lst = [] # [i, j, k, l, delta_angle]
+    rotate_dihedral_label_lst = []
     for bond in mol.GetBonds():
+
+        is_rotate = False
+
         j_idx = bond.GetBeginAtomIdx()
         k_idx = bond.GetEndAtomIdx()
         # check (j_idx, k_idx) in ring or not
@@ -287,8 +299,10 @@ def add_equi_noise(opt_mol, bond_var=0.04, angle_var=0.04, torsion_var=2):
 
         if f'{j_idx}_{k_idx}' in rotable_sets: # rotatable
             deh_var = torsion_var
+            is_rotate = True
         else:
             deh_var = angle_var
+            is_rotate = False
         
         # add noise
         org_deh_angle = GetDihedral(conf, [i_idx, j_idx, k_idx, l_idx])
@@ -296,9 +310,13 @@ def add_equi_noise(opt_mol, bond_var=0.04, angle_var=0.04, torsion_var=2):
             continue
         noise_deh_angle = np.random.normal(loc=org_deh_angle, scale=deh_var)
         SetDihedral(conf, [i_idx, j_idx, k_idx, l_idx], noise_deh_angle)
-        dihedral_label_lst.append([i_idx, j_idx, k_idx, l_idx, noise_deh_angle - org_deh_angle])
+
+        if is_rotate:
+            rotate_dihedral_label_lst.append([i_idx, j_idx, k_idx, l_idx, noise_deh_angle - org_deh_angle])
+        else:
+            dihedral_label_lst.append([i_idx, j_idx, k_idx, l_idx, noise_deh_angle - org_deh_angle])
     
-    return mol, bond_label_lst, angle_label_lst, dihedral_label_lst
+    return mol, bond_label_lst, angle_label_lst, dihedral_label_lst, rotate_dihedral_label_lst
 
 
 if __name__ == "__main__":

@@ -305,7 +305,7 @@ class PCQM4MV2_Force(PCQM4MV2_XYZ):
         mol = MOL_LST[idx.item()]
 
         # add noise to mol with different types of noise
-        noise_mol, bond_label_lst, angle_label_lst, dihedral_label_lst = add_equi_noise(mol, bond_var=self.bond_length_scale, angle_var=self.angle_noise_scale, torsion_var=self.dihedral_angle_noise_scale)
+        noise_mol, bond_label_lst, angle_label_lst, dihedral_label_lst, rotate_dihedral_label_lst = add_equi_noise(mol, bond_var=self.bond_length_scale, angle_var=self.angle_noise_scale, torsion_var=self.dihedral_angle_noise_scale)
 
         # get noise_mol coordinate
         atom_num = mol.GetNumAtoms()
@@ -335,6 +335,7 @@ class PCQM4MV2_Force(PCQM4MV2_XYZ):
         org_data.bond_target = torch.tensor(bond_label_lst)
         org_data.angle_target = torch.tensor(angle_label_lst)
         org_data.dihedral_target = torch.tensor(dihedral_label_lst)
+        org_data.rotate_dihedral_target = torch.tensor(rotate_dihedral_label_lst)
 
         return org_data
 

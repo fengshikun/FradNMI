@@ -101,12 +101,14 @@ class LNNP(LightningModule):
         bond_target_indx = slice_dict['bond_target']
         angle_target_indx = slice_dict['angle_target']
         dihedral_target_indx = slice_dict['dihedral_target']
+        rotate_dihedral_target_indx = slice_dict['rotate_dihedral_target']
         for i in range(batch_num):
             cur_num = slice_dict['pos'][i] # add to bond idx
             
             batch.bond_target[bond_target_indx[i]:bond_target_indx[i+1]][:, :2] += cur_num
             batch.angle_target[angle_target_indx[i]:angle_target_indx[i+1]][:, :3] += cur_num
             batch.dihedral_target[dihedral_target_indx[i]:dihedral_target_indx[i+1]][:, :4] += cur_num
+            batch.rotate_dihedral_target[rotate_dihedral_target_indx[i]:rotate_dihedral_target_indx[i+1]][:, :4] += cur_num
         
 
     def step(self, batch, loss_fn, stage):
@@ -226,13 +228,26 @@ class LNNP(LightningModule):
                 normalized_bond_target = self.model.bond_pos_normalizer(batch.bond_target[:,-1])
                 normalized_angle_target = self.model.angle_pos_normalizer(batch.angle_target[:,-1])
                 normalized_dihedral_target = self.model.dihedral_pos_normalizer(batch.dihedral_target[:,-1])
+                normalized_rotate_dihedral_target = self.model.rotate_dihedral_pos_normalizer(batch.rotate_dihedral_target[:,-1])
                 loss_bond = loss_fn(noise_pred[0], normalized_bond_target)
                 loss_angle = loss_fn(noise_pred[1], normalized_angle_target)
+                # loss_angle = loss_fn(noise_pred[1], batch.angle_target[:,-1])
+                
                 loss_dihedral = loss_fn(noise_pred[2], normalized_dihedral_target)
+                # loss_dihedral = loss_fn(noise_pred[2], batch.dihedral_target[:,-1])
+                
+                # loss_rotate_dihedral = loss_fn(noise_pred[3], batch.rotate_dihedral_target[:,-1])
+                loss_rotate_dihedral = loss_fn(noise_pred[3], normalized_rotate_dihedral_target)
+            
+
                 self.losses[stage + "_bond"].append(loss_bond.detach())
+                # self.losses[stage + "_angle"].append(loss_angle.detach() / (self.model.angle_pos_normalizer.std ** 2))
                 self.losses[stage + "_angle"].append(loss_angle.detach())
                 self.losses[stage + "_dihedral"].append(loss_dihedral.detach())
-                loss_pos = loss_bond + loss_angle + loss_dihedral
+                # self.losses[stage + "_dihedral"].append(loss_dihedral.detach() / (self.model.dihedral_pos_normalizer.std ** 2))
+                self.losses[stage + "_rotate_dihedral"].append(loss_rotate_dihedral.detach())
+                # self.losses[stage + "_rotate_dihedral"].append(loss_rotate_dihedral.detach() / (self.model.rotate_dihedral_pos_normalizer.std ** 2))
+                loss_pos = loss_bond + loss_angle + loss_dihedral + loss_rotate_dihedral
                 if loss_pos.isnan().sum().item():
                     print('loss nan!!!')
             else:
@@ -381,6 +396,10 @@ class LNNP(LightningModule):
             "train_dihedral": [],
             "val_dihedral": [],
             "test_dihedral": [],
+
+            "train_rotate_dihedral": [],
+            "val_rotate_dihedral": [],
+            "test_rotate_dihedral": [],
 
         }
 

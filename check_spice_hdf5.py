@@ -89,4 +89,4 @@ with h5py.File(filename, 'r') as raw_data:
             break
 
 np.save("SPICE_mols.npy", mol_lst)
-np.save("SPICE_mols_energy.npy", energy_lst)
+np.save("SPICE_mols_energy.npy", np.asarray(energy_lst, dtype=object))
