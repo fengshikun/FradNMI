@@ -14,7 +14,8 @@ IndexType = Union[slice, Tensor, np.ndarray, Sequence]
 import random
 import torch.nn.functional as F
 import copy
-
+import lmdb
+import pickle
 
 import torch
 from torch_geometric.data import (InMemoryDataset, download_url, extract_zip,
@@ -382,7 +383,8 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
             # with open(sdf_path, 'rb') as handle:
             #     MOL_LST = pickle.load(handle)
             # MOL_LST = np.load("mol_iter_all.npy", allow_pickle=True)
-                MOL_LST = np.load("h_mol_lst.npy", allow_pickle=True)
+                # MOL_LST = np.load("h_mol_lst.npy", allow_pickle=True)
+                MOL_LST = lmdb.open('/home/fengshikun/MOL_LMDB', readonly=True, subdir=True, lock=False)
             
         if debug:
             global MOL_DEBUG_LST
@@ -447,7 +449,10 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
                 weight = 1
             
         else:
-            mol = MOL_LST[idx.item()]
+            # mol = MOL_LST[idx.item()]
+            ky = str(idx.item()).encode()
+            serialized_data = MOL_LST.begin().get(ky)
+            mol = pickle.loads(serialized_data)
 
 
         atom_num = mol.GetNumAtoms()
