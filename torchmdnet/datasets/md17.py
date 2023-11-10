@@ -187,12 +187,17 @@ class MD17A(InMemoryDataset):
             MOL_LST = np.load(f"{root}/processed/{MD17A.mol_npy_files[dataset_arg]}", allow_pickle=True)
     
     def transform_noise(self, data, position_noise_scale):
-        noise = torch.randn_like(torch.tensor(data)) * position_noise_scale
+        try:
+            if type(data) == np.ndarray:
+                data = torch.from_numpy(data)
+        except:
+            print(type(data))
+        noise = torch.randn_like(data.clone().detach()) * position_noise_scale
         data_noise = data + noise.numpy()
         return data_noise
     
     
-    def __getitem__(self, idx: Union[int, np.integer, IndexType]) -> Union['Dataset', Data]:
+    def __getitem__(self, idx):
         org_data = super().__getitem__(idx)
         org_atom_num = org_data.pos.shape[0]
         # change org_data coordinate
@@ -219,9 +224,9 @@ class MD17A(InMemoryDataset):
         assert atom_num == org_atom_num
         if len(rotable_bonds) == 0 or self.cod_denoise:
             pos_noise_coords = self.transform_noise(org_data.pos, self.position_noise_scale)
-            org_data.pos_target = torch.tensor(pos_noise_coords - org_data.pos.numpy())
+            org_data.pos_target = (pos_noise_coords - org_data.pos.numpy()).clone().detach()
             org_data.org_pos = org_data.pos
-            org_data.pos = torch.tensor(pos_noise_coords)
+            org_data.pos = pos_noise_coords.clone().detach()
             return org_data
 
 
@@ -263,8 +268,10 @@ class MD17A(InMemoryDataset):
         pos_noise_coords = self.transform_noise(pos_noise_coords_angle, self.position_noise_scale)
         
         org_data.org_pos = org_data.pos
-        org_data.pos_target = torch.tensor(pos_noise_coords - pos_noise_coords_angle)
-        org_data.pos = torch.tensor(pos_noise_coords)
+        org_data.pos_target = (pos_noise_coords - pos_noise_coords_angle).clone().detach()
+        # org_data.pos = torch.tensor(pos_noise_coords)
+        org_data.pos = pos_noise_coords.clone().detach()
+
         
         
         # if self.composition:
