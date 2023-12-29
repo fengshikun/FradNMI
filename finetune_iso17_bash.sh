@@ -22,7 +22,7 @@ CUDA_VISIBLE_DEVICES=0 python -u scripts/train.py \
 --log-dir iso-energy \
 --ngpus 1 \
 --job-id iso17_${loss}_${lr}_${lr_schedule} \
---pretrained-model experiments/step=399999-epoch=8-val_loss=0.1626-test_loss=0.2945-train_per_step=0.1681.ckpt \
+--pretrained-model $pretrain_model_path \
 --train-loss-type ${loss}  \
 --save-top-k 1 \
 --save-interval 1 \

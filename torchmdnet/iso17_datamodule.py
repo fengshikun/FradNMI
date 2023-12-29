@@ -24,8 +24,10 @@ import json
 ELE_TO_NUM = {'H':1 , 'C': 6, 'N': 7, 'O':8}
 ATOM_DICT = {1: 'H', 6: 'C', 7: 'N', 8: 'O'}
 
-energyScale = 23.0605
-forceScale = 23.0605
+# energyScale = 23.0605
+# forceScale = 23.0605
+energyScale = 1
+forceScale = 1
 
 class ISO17(Dataset):
     def __init__(self, data_dir, species, positions, energies, forces, smiles=None):
