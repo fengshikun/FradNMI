@@ -19,6 +19,7 @@ from torchmdnet.models.utils import rbf_class_mapping, act_class_mapping
 from torchmdnet.utils import LoadFromFile, LoadFromCheckpoint, save_argparse, number
 from pathlib import Path
 import wandb
+from pytorch_lightning.strategies.ddp import DDPStrategy
 
 
 wandb.login(key='a46eaf1ea4fdcf3a2a93022568aa1c730c208b50')
@@ -62,6 +63,8 @@ def get_args():
     parser.add_argument('--job-id', default="auto", type=str, help='Job ID. If auto, pick the next available numeric job id.')
     parser.add_argument('--pretrained-model', default=None, type=str, help='Pre-trained weights checkpoint.')
 
+    parser.add_argument('--bat-noise', type=bool, default=False, help='if add bat noise in PCQM4MV2_Dihedral2')
+    
     # dataset specific
     parser.add_argument('--dataset', default=None, type=str, choices=datasets.__all__, help='Name of the torch_geometric dataset')
     parser.add_argument('--dataset-root', default='data', type=str, help='Data storage directory (not used if dataset is "CG")')
@@ -204,7 +207,8 @@ def main():
         dirpath=args.log_dir,
         monitor="val_loss",
         save_top_k=args.save_top_k,  # -1 to save all
-        period=args.save_interval,
+        every_n_epochs=args.save_interval,
+        # period=args.save_interval,
         filename="{step}-{epoch}-{val_loss:.4f}-{test_loss:.4f}-{train_per_step:.4f}",
         save_last=True,
     )
@@ -214,8 +218,9 @@ def main():
         args.log_dir, name="tensorbord", version="", default_hp_metric=False
     )
     csv_logger = CSVLogger(args.log_dir, name="", version="")
-    wandb_logger = WandbLogger(name=args.job_id, project='pre-training-via-denoising', notes=args.wandb_notes, settings=wandb.Settings(start_method='fork', code_dir="."))
+    wandb_logger = WandbLogger(name=args.job_id, project='pre-training-via-denoising2', notes=args.wandb_notes, settings=wandb.Settings(start_method='fork', code_dir="."))
 
+    # wandb_logger.watch(model) # log gradient
     @rank_zero_only
     def log_code():
         wandb_logger.experiment # runs wandb.init, so then code can be logged next
@@ -225,7 +230,13 @@ def main():
 
     ddp_plugin = None
     if "ddp" in args.distributed_backend:
-        ddp_plugin = DDPPlugin(find_unused_parameters=False, num_nodes=args.num_nodes)
+        ddp_plugin = DDPStrategy(find_unused_parameters=True) # , num_nodes=args.num_nodes)
+
+
+
+    # ddp_plugin = None
+    # if "ddp" in args.distributed_backend:
+    #     ddp_plugin = DDPPlugin(find_unused_parameters=False, num_nodes=args.num_nodes)
 
     trainer = pl.Trainer(
         max_epochs=args.num_epochs,
@@ -239,8 +250,10 @@ def main():
         resume_from_checkpoint=args.load_model,
         callbacks=[early_stopping, checkpoint_callback],
         logger=[tb_logger, csv_logger, wandb_logger],
-        reload_dataloaders_every_epoch=False,
+        reload_dataloaders_every_n_epochs=1,
+        # reload_dataloaders_every_epoch=False,
         precision=args.precision,
+        strategy=ddp_plugin,
         # plugins=[ddp_plugin],
     )
 

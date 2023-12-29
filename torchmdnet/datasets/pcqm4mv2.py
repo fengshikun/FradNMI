@@ -21,7 +21,7 @@ import torch
 from torch_geometric.data import (InMemoryDataset, download_url, extract_zip,
                                   Data)
 
-from torsion_utils import get_torsions, GetDihedral, apply_changes, get_rotate_order_info, add_equi_noise
+from torsion_utils import get_torsions, GetDihedral, apply_changes, get_rotate_order_info, add_equi_noise, add_equi_noise_new
 from rdkit.Geometry import Point3D
 
 
@@ -347,7 +347,7 @@ EQ_EN_LST = None
 class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
     def __init__(self, root: str, sdf_path: str, dihedral_angle_noise_scale: float, position_noise_scale: float, composition: bool, decay=False, decay_coe=0.2, transform: Optional[Callable] = None,
                  pre_transform: Optional[Callable] = None,
-                 pre_filter: Optional[Callable] = None, dataset_arg: Optional[str] = None, equilibrium=False, eq_weight=False, cod_denoise=False, integrate_coord=False, addh=False, mask_atom=False, mask_ratio=0.15):
+                 pre_filter: Optional[Callable] = None, dataset_arg: Optional[str] = None, equilibrium=False, eq_weight=False, cod_denoise=False, integrate_coord=False, addh=False, mask_atom=False, mask_ratio=0.15, bat_noise=False):
         assert dataset_arg is None, "PCQM4MV2_Dihedral does not take any dataset args."
         super().__init__(root, transform, pre_transform, pre_filter)
         # self.suppl = Chem.SDMolSupplier(sdf_path)
@@ -369,6 +369,8 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
         self.mask_atom = mask_atom
         self.mask_ratio = mask_ratio
         self.num_atom_type = 119
+
+        self.bat_noise = bat_noise
         
         global MOL_LST
         global EQ_MOL_LST
@@ -384,7 +386,7 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
             #     MOL_LST = pickle.load(handle)
             # MOL_LST = np.load("mol_iter_all.npy", allow_pickle=True)
                 # MOL_LST = np.load("h_mol_lst.npy", allow_pickle=True)
-                MOL_LST = lmdb.open('/home/fengshikun/MOL_LMDB', readonly=True, subdir=True, lock=False)
+                MOL_LST = lmdb.open(f'{root}/MOL_LMDB', readonly=True, subdir=True, lock=False)
             
         if debug:
             global MOL_DEBUG_LST
@@ -449,10 +451,10 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
                 weight = 1
             
         else:
-            # mol = MOL_LST[idx.item()]
             ky = str(idx.item()).encode()
             serialized_data = MOL_LST.begin().get(ky)
             mol = pickle.loads(serialized_data)
+            # mol = MOL_LST[idx.item()]
 
 
         atom_num = mol.GetNumAtoms()
@@ -499,11 +501,14 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
             noise_angle = self.transform_noise_decay(org_angle, self.dihedral_angle_noise_scale, decay_coe_lst)
             new_mol = apply_changes(mol, noise_angle, rotate_bonds_order)
         else:
-            for rot_bond in rotable_bonds:
-                org_angle.append(GetDihedral(mol.GetConformer(), rot_bond))
-            org_angle = np.array(org_angle)        
-            noise_angle = self.transform_noise(org_angle, self.dihedral_angle_noise_scale)
-            new_mol = apply_changes(mol, noise_angle, rotable_bonds)
+            if self.bat_noise:
+                new_mol, bond_label_lst, angle_label_lst, dihedral_label_lst, rotate_dihedral_label_lst, specific_var_lst = add_equi_noise_new(mol, add_ring_noise=False)
+            else:
+                for rot_bond in rotable_bonds:
+                    org_angle.append(GetDihedral(mol.GetConformer(), rot_bond))
+                org_angle = np.array(org_angle)        
+                noise_angle = self.transform_noise(org_angle, self.dihedral_angle_noise_scale)
+                new_mol = apply_changes(mol, noise_angle, rotable_bonds)
         
         coord_conf = new_mol.GetConformer()
         pos_noise_coords_angle = np.zeros((atom_num, 3), dtype=np.float32)
@@ -518,6 +523,14 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
         #     c_pos = coord_conf.GetAtomPosition(idx)
         #     coords[idx] = [float(c_pos.x), float(c_pos.y), float(c_pos.z)]
         # coords = mol.GetConformer().GetPositions()
+
+        if self.bat_noise:
+            # check nan
+            if torch.tensor(pos_noise_coords_angle).isnan().sum().item():# contains nan
+                print('--------bat nan, revert back to org coord-----------')
+                pos_noise_coords_angle = org_data.pos.numpy()
+
+
 
         pos_noise_coords = self.transform_noise(pos_noise_coords_angle, self.position_noise_scale)
         
