@@ -6,7 +6,7 @@ batch_size: 2048
 coord_files: null
 cutoff_lower: 0.0
 cutoff_upper: 5.0
-dataset: ANI1
+dataset: ANI1A
 dataset_arg: null
 dataset_root: data/ani/ani1/
 derivative: false
@@ -55,3 +55,12 @@ train_size: 0.8
 trainable_rbf: false
 val_size: 0.1
 weight_decay: 0.0
+seperate_noise: true
+output_model_noise: VectorOutput
+position_noise_scale: 0.005
+dihedral_angle_noise_scale: 0.1
+denoising_weight: 0.1
+composition: true
+layernorm_on_vec: null
+wandb_notes: ""
+job_id: auto
