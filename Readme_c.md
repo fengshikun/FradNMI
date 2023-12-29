@@ -41,14 +41,13 @@ python -u scripts/train.py --conf examples/ET-MD17_FT-angle_9500.yaml  --job-id 
 
 
 #### Finetuning the MD22
+Below is the script for fine-tuning the MD22 task. Replace pretrain_model_path with the actual model path. In this script, the subtask is set to 'AT-AT-CG-CG' by `--dataset-arg`, but it can be replaced with other subtasks such in ("AT-AT-CG-CG" "AT-AT" "Ac-Ala3-NHMe" "DHA" "buckyball-catcher" "double-walled_nanotube" "stachyose").
 ```bash
 python -u scripts/train.py --conf examples/ET-MD22.yaml --batch-size 32 --inference-batch-size 32 --num-epochs 100 --lr 1e-3 --log-dir md22-AT-AT-CG-CG --dataset-arg AT-AT-CG-CG --ngpus 1 --job-id md22-AT-AT-CG-CG --pretrained-model $$pretrain_model_path --lr-schedule cosine_warmup --save-top-k 1 --save-interval 1 --test-interval 1 --seed 666 --md17 true --train-loss-type smooth_l1_loss
 ```
 
 #### Finetuning the ISO17
+Below is the script for fine-tuning the ISO17 task.
 ```bash
 python -u scripts/train.py --conf examples/ET-ISO17.yaml --batch-size 256 --job-id iso17 --inference-batch-size 256 --pretrained-model $pretrain_model_path --num-epochs 50 --lr 2e-4 --log-dir iso-energy --ngpus 1  --save-top-k 1 --save-interval 1 --test-interval 1 --seed 666 --lr-schedule cosine_warmup --md17 true --train-loss-type smooth_l1_loss
 ```
-
-For more argument settings, you can refer to `finetune_iso17_bash.sh`  and `finetune_md22_bash.sh`.
-
