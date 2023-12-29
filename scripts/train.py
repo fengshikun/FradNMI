@@ -21,6 +21,17 @@ from pathlib import Path
 import wandb
 from pytorch_lightning.strategies.ddp import DDPStrategy
 
+from torchmdnet import ANIDataModule, ANIXDataModule, ISO17DataModule, MD22DataModule, SPICEDataModule
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 
 wandb.login(key='a46eaf1ea4fdcf3a2a93022568aa1c730c208b50')
 def get_args():
@@ -33,7 +44,7 @@ def get_args():
     parser.add_argument('--batch-size', default=32, type=int, help='batch size')
     parser.add_argument('--inference-batch-size', default=None, type=int, help='Batchsize for validation and tests.')
     parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
-    parser.add_argument('--lr-schedule', default="reduce_on_plateau", type=str, choices=['cosine', 'reduce_on_plateau'], help='Learning rate schedule.')
+    parser.add_argument('--lr-schedule', default="reduce_on_plateau", type=str, choices=['cosine', 'reduce_on_plateau', 'cosine_warmup'], help='Learning rate schedule.')
     parser.add_argument('--lr-patience', type=int, default=10, help='Patience for lr-schedule. Patience per eval-interval of validation')
     parser.add_argument('--lr-min', type=float, default=1e-6, help='Minimum learning rate before early stop')
     parser.add_argument('--lr-factor', type=float, default=0.8, help='Minimum learning rate before early stop')
@@ -84,7 +95,7 @@ def get_args():
     parser.add_argument('--sdf-path', default=None, type=str, help='sdf path')
     parser.add_argument('--violate', type=bool, default=False, help='violate conformation rules or not.')
 
-    parser.add_argument('--md17', type=bool, default=False, help='is md17 test set.')
+    parser.add_argument('--md17', type=str2bool, default=False, help='is md17 test set.')
     parser.add_argument('--seperate-noise', type=bool, default=False, help='seperate noise.')
 
 
@@ -131,7 +142,7 @@ def get_args():
     parser.add_argument('--num-rbf', type=int, default=64, help='Number of radial basis functions in model')
     parser.add_argument('--activation', type=str, default='silu', choices=list(act_class_mapping.keys()), help='Activation function')
     parser.add_argument('--rbf-type', type=str, default='expnorm', choices=list(rbf_class_mapping.keys()), help='Type of distance expansion')
-    parser.add_argument('--trainable-rbf', type=bool, default=False, help='If distance expansion functions should be trainable')
+    parser.add_argument('--trainable-rbf', type=str2bool, default=False, help='If distance expansion functions should be trainable')
     parser.add_argument('--neighbor-embedding', type=bool, default=False, help='If a neighbor embedding should be applied before interactions')
     parser.add_argument('--aggr', type=str, default='add', help='Aggregation operation for CFConv filter output. Must be one of \'add\', \'mean\', or \'max\'')
 
@@ -142,13 +153,13 @@ def get_args():
     parser.add_argument('--layernorm-on-vec', type=str, default=None, choices=['whitened'], help='Whether to apply an equivariant layer norm to vec features. Off by default.')
 
     # other args
-    parser.add_argument('--derivative', default=False, type=bool, help='If true, take the derivative of the prediction w.r.t coordinates')
+    parser.add_argument('--derivative', default=False, type=str2bool, help='If true, take the derivative of the prediction w.r.t coordinates')
     parser.add_argument('--cutoff-lower', type=float, default=0.0, help='Lower cutoff in model')
     parser.add_argument('--cutoff-upper', type=float, default=5.0, help='Upper cutoff in model')
     parser.add_argument('--atom-filter', type=int, default=-1, help='Only sum over atoms with Z > atom_filter')
     parser.add_argument('--max-z', type=int, default=100, help='Maximum atomic number that fits in the embedding matrix')
     parser.add_argument('--max-num-neighbors', type=int, default=32, help='Maximum number of neighbors to consider in the network')
-    parser.add_argument('--standardize', type=bool, default=False, help='If true, multiply prediction by dataset std and add mean')
+    parser.add_argument('--standardize', type=str2bool, default=False, help='If true, multiply prediction by dataset std and add mean')
     parser.add_argument('--reduce-op', type=str, default='add', choices=['add', 'mean'], help='Reduce operation to apply to atomic predictions')
     # fmt: on
 
@@ -186,7 +197,19 @@ def main():
     print(args)
 
     # initialize data module
-    data = DataModule(args)
+    if "ANI1" in args.dataset:
+        if "ANI1X" in args.dataset:
+            data = ANIXDataModule(args)
+        else:
+            data = ANIDataModule(args)
+    elif "ISO17" in args.dataset:
+        data = ISO17DataModule(args)
+    elif "MD22" in args.dataset:
+        data = MD22DataModule(args)
+    elif "SPICE" in args.dataset:
+        data = SPICEDataModule(args)
+    else:
+        data = DataModule(args)
     data.prepare_data()
     data.setup("fit")
 
@@ -260,7 +283,8 @@ def main():
     trainer.fit(model, data)
 
     # run test set after completing the fit
-    trainer.test()
+    test_result = trainer.test(model, data)
+    print(test_result)
 
 
 if __name__ == "__main__":

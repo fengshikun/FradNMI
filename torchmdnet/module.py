@@ -1,10 +1,11 @@
 import torch
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR, _LRScheduler
 from torch.nn.functional import mse_loss, l1_loss, smooth_l1_loss
 
 from pytorch_lightning import LightningModule
 from torchmdnet.models.model import create_model, load_model
+import math
 
 
 class LNNP(LightningModule):
@@ -65,6 +66,13 @@ class LNNP(LightningModule):
                 "interval": "epoch",
                 "frequency": 1,
             }
+        elif self.hparams.lr_schedule == "cosine_warmup":
+            scheduler = CustomScheduler(optimizer=optimizer, max_lr=self.hparams.lr, min_lr=self.hparams.lr_min, iters_per_epoch=len(self.train_dataloader()), num_epochs=self.hparams.num_epochs)
+            lr_scheduler = {
+                "scheduler": scheduler,
+                "interval": "step",
+                "frequency": 1,
+            }
         else:
             raise ValueError(f"Unknown lr_schedule: {self.hparams.lr_schedule}")
         return [optimizer], [lr_scheduler]
@@ -75,6 +83,8 @@ class LNNP(LightningModule):
     def training_step(self, batch, batch_idx):
         if self.train_loss_type == 'smooth_l1_loss':
             return self.step(batch, smooth_l1_loss, 'train')
+        elif self.train_loss_type == 'l1_loss':
+            return self.step(batch, l1_loss, "train")    
         return self.step(batch, mse_loss, "train")
 
     def validation_step(self, batch, batch_idx, *args):
@@ -151,7 +161,18 @@ class LNNP(LightningModule):
                 deriv = deriv + pred.sum() * 0
 
             # force/derivative loss
-            loss_dy = loss_fn(deriv, batch.dy)
+            if stage == "test" and  "smi" in batch: 
+                # log test mae and rmse at test stage
+                loss_dy = loss_fn(deriv, batch.dy)
+                dy_mae = l1_loss(deriv, batch.dy)
+                dy_rmse = torch.sqrt(mse_loss(deriv, batch.dy))
+                self.losses["test_dy_mae"].append(dy_mae.detach())
+                self.losses["test_dy_rmse"].append(dy_rmse.detach())
+            else:
+                loss_dy = loss_fn(deriv, batch.dy)
+            if torch.isnan(loss_dy).sum():
+                print('loss nan happens')
+            
 
             if stage in ["train", "val"] and self.hparams.ema_alpha_dy < 1:
                 if self.ema[stage + "_dy"] is None:
@@ -180,7 +201,15 @@ class LNNP(LightningModule):
             if torch.isnan(pred).sum():
                 print('pred nan happends')
             # energy/prediction loss
-            loss_y = loss_fn(pred, batch.y)
+            if stage == "test" and  "smi" in batch: 
+                # log test mae and rmse at test stage
+                loss_y = loss_fn(pred, batch.y)
+                y_mae = l1_loss(pred, batch.y)
+                y_rmse = torch.sqrt(mse_loss(pred, batch.y))
+                self.losses["test_y_mae"].append(y_mae.detach())
+                self.losses["test_y_rmse"].append(y_rmse.detach())
+            else:
+                loss_y = loss_fn(pred, batch.y)
             if torch.isnan(loss_y).sum():
                 print('loss nan happens')
 
@@ -207,7 +236,7 @@ class LNNP(LightningModule):
             
             def weighted_mse_loss(input, target, weight):
                 return (weight.reshape(-1, 1).repeat((1, 3)) * (input - target) ** 2).mean()
-            def mse_loss(input, target):
+            def custom_mse_loss(input, target):
                 return ((input - target) ** 2).mean()
 
             if 'wg' in batch.keys:
@@ -215,7 +244,7 @@ class LNNP(LightningModule):
                 wt = batch['w1'].sum() / batch['idx'].shape[0]
                 weights = batch['wg'] / wt
             else:
-                loss_fn = mse_loss
+                loss_fn = custom_mse_loss
             if self.model.pos_normalizer is not None:
                 normalized_pos_target = self.model.pos_normalizer(batch.pos_target)
                 if 'wg'in batch.keys:
@@ -302,10 +331,9 @@ class LNNP(LightningModule):
     def test_epoch_end(self, outputs):
         result_dict = {}
         if len(self.losses["test_y"]) > 0:
-                result_dict["test_loss_y"] = torch.stack(
-                    self.losses["test_y"]
-                ).mean()
-        return result_dict
+            result_dict["test_loss_y"] = torch.stack(
+                self.losses["test_y"]
+            ).mean()
     
     # TODO(shehzaidi): clean up this function, redundant logging if dy loss exists.
     def validation_epoch_end(self, validation_step_outputs):
@@ -364,6 +392,26 @@ class LNNP(LightningModule):
                     self.losses["test_pos"]
                 ).mean()
 
+            if len(self.losses["test_y_mae"]) > 0:
+                result_dict["test_y_mae_loss"] = torch.stack(
+                    self.losses["test_y_mae"]
+                ).mean()
+
+            if len(self.losses["test_y_rmse"]) > 0:
+                result_dict["test_y_rmse_loss"] = torch.stack(
+                    self.losses["test_y_rmse"]
+                ).mean()
+
+            if len(self.losses["test_dy_mae"]) > 0:
+                result_dict["test_dy_mae_loss"] = torch.stack(
+                    self.losses["test_dy_mae"]
+                ).mean()
+
+            if len(self.losses["test_dy_rmse"]) > 0:
+                result_dict["test_dy_rmse_loss"] = torch.stack(
+                    self.losses["test_dy_rmse"]
+                ).mean()
+
             self.log_dict(result_dict, sync_dist=True)
         self._reset_losses_dict()
 
@@ -372,15 +420,19 @@ class LNNP(LightningModule):
             "train": [],
             "val": [],
             "test": [],
+
             "train_y": [],
             "val_y": [],
             "test_y": [],
+
             "train_dy": [],
             "val_dy": [],
             "test_dy": [],
+
             "train_pos": [],
             "val_pos": [],
             "test_pos": [],
+
             "train_mask_atom_loss": [],
             "val_mask_atom_loss": [],
             "test_mask_atom_loss": [],
@@ -401,7 +453,36 @@ class LNNP(LightningModule):
             "val_rotate_dihedral": [],
             "test_rotate_dihedral": [],
 
+            "test_y_mae": [],
+            "test_y_rmse": [],
+            "test_dy_mae": [],
+            "test_dy_rmse": [],
+
         }
 
     def _reset_ema_dict(self):
         self.ema = {"train_y": None, "val_y": None, "train_dy": None, "val_dy": None}
+
+
+class CustomScheduler(_LRScheduler):
+    def __init__(self, optimizer, max_lr, min_lr, iters_per_epoch, num_epochs, last_epoch=-1):
+        self.max_lr = max_lr
+        self.min_lr = min_lr
+        self.iters_per_epoch = iters_per_epoch
+        self.num_epochs = num_epochs
+        self.total_iters = iters_per_epoch * num_epochs
+        self.warmup_epoch = 0.3
+        self.patience_epoch = 0.7
+        super(CustomScheduler, self).__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        cur_iter = self.last_epoch
+        if cur_iter < self.warmup_epoch * self.iters_per_epoch:
+            return [self.max_lr * cur_iter / (self.warmup_epoch * self.total_iters) for base_lr in self.base_lrs]
+        elif cur_iter < (self.patience_epoch + self.warmup_epoch) * self.iters_per_epoch:
+            return [self.max_lr for base_lr in self.base_lrs]
+        else:
+            prev_iters = (self.patience_epoch + self.warmup_epoch) * self.iters_per_epoch
+            lr = self.min_lr + (self.max_lr - self.min_lr) * 0.5 * \
+                (1. + math.cos(math.pi * (cur_iter - prev_iters) / (self.total_iters - prev_iters)))
+            return [lr for base_lr in self.base_lrs]
