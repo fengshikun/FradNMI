@@ -141,5 +141,10 @@ data/
 experiments/
 plots/
 
+*.log
+md22*/
+iso-energy/
+ani1*/
+
 *.sdf
 *.npy

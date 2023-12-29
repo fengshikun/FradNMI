@@ -31,11 +31,11 @@ CUDA_VISIBLE_DEVICES=0 python -u scripts/train.py \
 --dataset-arg ${dataset_arg} \
 --ngpus 1 \
 --job-id md22_${loss}_${lr}_${lr_schedule}_${dataset_arg} \
---pretrained-model "experiments/step=399999-epoch=8-val_loss=0.1626-test_loss=0.2945-train_per_step=0.1681.ckpt"
+--pretrained-model $$pretrain_model_path \
 --train-loss-type ${loss}  \
+--lr-schedule ${lr_schedule} \
 --save-top-k 1 \
 --save-interval 1 \
 --test-interval 1 \
 --seed 666 \
 --md17 true \
---lr-schedule ${lr_schedule} \
