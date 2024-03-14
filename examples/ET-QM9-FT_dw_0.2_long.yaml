@@ -8,7 +8,7 @@ cutoff_lower: 0.0
 cutoff_upper: 5.0
 dataset: QM9
 dataset_arg: homo
-dataset_root: /home/fengshikun/Backup/Denoising/data/qm9
+dataset_root: /nfs/SKData/DenoisingData/qm9
 derivative: false
 distance_influence: both
 distributed_backend: ddp
