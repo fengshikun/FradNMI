@@ -21,7 +21,8 @@ import torch
 from torch_geometric.data import (InMemoryDataset, download_url, extract_zip,
                                   Data)
 
-from torsion_utils import get_torsions, GetDihedral, apply_changes, get_rotate_order_info, add_equi_noise, add_equi_noise_new
+from torsion_utils import get_torsions, GetDihedral, apply_changes, get_rotate_order_info, add_equi_noise
+# , add_equi_noise_new
 from rdkit.Geometry import Point3D
 
 
