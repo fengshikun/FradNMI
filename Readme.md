@@ -12,6 +12,8 @@ Vibration and Rotation (VR) Noise (Model for Atomic Forces Tasks like md17, md22
 python -u scripts/train.py --conf examples/ET-PCQM4MV2_var0.4_var2_com_re_md17.yaml --layernorm-on-vec whitened --job-id frad_pretraining_force --num-epochs 8 --bat-noise true
 ```
 
+
+The data used to pre-train the model is provided here: https://drive.google.com/drive/folders/1F9CyD4HkVL0XFNwtSOTHaXgqZfzLAqFf?usp=sharing
 We have provided the pretrained models at the following links:
 
 Rotation Noise: [https://drive.google.com/file/d/1O6f6FzYogBS2Mp4XsdAAEN4arLtLH38G/view?usp=sharing]
