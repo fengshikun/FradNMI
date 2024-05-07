@@ -148,6 +148,18 @@ def create_model(args, prior_model=None, mean=None, std=None):
     return model
 
 
+# to copy the embedding of atom
+# todo z start from 0 or 1(H)
+pcq_with_h = {'name': 'pcq', 
+              'atom_encoder': {'H': 0, 'He': 1, 'Be': 2, 'B': 3, 'C': 4, 'N': 5, 'O': 6, 'F': 7, 'Mg': 8, 'Si': 9, 'P': 10, 'S': 11, 'Cl': 12, 'Ar': 13, 'Ca': 14, 'Ti': 15, 'Zn': 16, 'Ga': 17, 'Ge': 18, 'As': 19, 'Se': 20, 'Br': 21}, 
+              'atomic_nb': [1, 2, 4, 5, 6, 7, 8, 9, 12, 14, 15, 16, 17, 18, 20, 22, 30, 31, 32, 33, 34, 35], 
+              'atom_decoder': ['H', 'He', 'Be', 'B', 'C', 'N', 'O', 'F', 'Mg', 'Si', 'P', 'S', 'Cl', 'Ar', 'Ca', 'Ti', 'Zn', 'Ga', 'Ge', 'As', 'Se', 'Br'], 
+              'max_n_nodes': 53, 
+              'n_nodes': {2: 77, 3: 62, 4: 162, 5: 439, 6: 721, 7: 1154, 8: 1879, 9: 2758, 10: 4419, 11: 6189, 12: 9283, 13: 12620, 14: 18275, 15: 24340, 16: 31938, 17: 40477, 18: 51301, 19: 62211, 20: 74714, 21: 87453, 22: 103873, 23: 121040, 24: 135340, 25: 148497, 26: 165882, 27: 177003, 28: 185152, 29: 187492, 30: 204544, 31: 183114, 32: 183603, 33: 177381, 34: 174403, 35: 147153, 36: 129541, 37: 113794, 38: 99679, 39: 79646, 40: 59481, 41: 46282, 42: 36100, 43: 26546, 44: 17533, 45: 15672, 46: 13709, 47: 7774, 48: 1256, 49: 5445, 50: 955, 51: 118, 52: 1, 53: 125}, 
+              'atom_types': {0: 51915415, 1: 5, 2: 2, 3: 17730, 4: 35554802, 5: 5667122, 6: 4981302, 7: 561570, 8: 2, 9: 33336, 10: 40407, 11: 506659, 12: 310138, 13: 3, 14: 2, 15: 4, 16: 4, 17: 4, 18: 369, 19: 299, 20: 1459, 21: 36399}, 
+              'colors_dic': ['#FFFFFF99', 'C2', 'C7', 'C0', 'C3', 'C1', 'C5', 'C6', 'C4', 'C8', 'C9', 'C10', 'C11', 'C12', 'C13', 'C14', 'C15', 'C16', 'C17', 'C18', 'C19', 'C20'], 'radius_dic': [0.3, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6], 'with_h': True}
+
+
 def load_model(filepath, args=None, device="cpu", mean=None, std=None, **kwargs):
     ckpt = torch.load(filepath, map_location="cpu")
     if args is None:
@@ -159,9 +171,58 @@ def load_model(filepath, args=None, device="cpu", mean=None, std=None, **kwargs)
         args[key] = value
 
     model = create_model(args)
+    
+    if "state_dict" not in ckpt: # load diffusion model
+        new_state_dict = {}
+        for k, v in ckpt.items():
+            # if 'pos_normalizer' not in k:
+            if 'dynamics.gnn' in k:
+                k = k.replace('dynamics.gnn.', '')
+                new_state_dict[k] = v
+        
+        current_model_dict = model.representation_model.state_dict()
+        # ommit mismatching shape
+        new_state_dict2 = {}
+        
+        embedding_keys = []
+        for k in current_model_dict:
+            if k in new_state_dict:
+                if current_model_dict[k].size() == new_state_dict[k].size():
+                    new_state_dict2[k] = new_state_dict[k]
+                else:
+                    print(f'warning {k} shape mismatching, not loaded')
+                    new_state_dict2[k] = current_model_dict[k]
+                    new_state_dict2[k][pcq_with_h['atomic_nb']] = new_state_dict[k].T[:-1] + new_state_dict[k.split('.weight')[0] + '.bias']
+                    embedding_keys.append(k)
+        
+        # new_state_dict2 = {k:v if v.size()==current_model_dict[k].size()  else  current_model_dict[k] for k,v in zip(current_model_dict.keys(), new_state_dict.values())}
+        # for k,v in zip(current_model_dict.keys(), new_state_dict.values()):
+        #     if v.size()!=current_model_dict[k].size():
+        #         print(f'warning {k} shape mismatching, not loaded')
+        
+        # loading_return = model.load_state_dict(state_dict, strict=False)
+        loading_return = model.representation_model.load_state_dict(new_state_dict2, strict=False)
+        
+        
+        # copy the embedding weight
+        
+        
+        
+        
+        
+        # loading_return = model.load_state_dict(state_dict, strict=False)
+        # loading_return = model.load_state_dict(new_state_dict, strict=False)
+        # if len(loading_return.unexpected_keys) > 0:
+        #     # Should only happen if not applying denoising during fine-tuning.
+        #     # assert all(("output_model_noise" in k or "pos_normalizer" in k) for k in loading_return.unexpected_keys)
+        #     pass
+        # # assert len(loading_return.missing_keys) == 0, f"Missing keys: {loading_return.missing_keys}"
+        # if len(loading_return.missing_keys) > 0:
+        #     print(f'warning:  load model missing keys {loading_return.missing_keys}')
+    else:
 
-    state_dict = {re.sub(r"^model\.", "", k): v for k, v in ckpt["state_dict"].items()}
-    loading_return = model.load_state_dict(state_dict, strict=False)
+        state_dict = {re.sub(r"^model\.", "", k): v for k, v in ckpt["state_dict"].items()}
+        loading_return = model.load_state_dict(state_dict, strict=False)
     
     if len(loading_return.unexpected_keys) > 0:
         # Should only happen if not applying denoising during fine-tuning.
