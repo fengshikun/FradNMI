@@ -1,5 +1,5 @@
 import torch
-from torch.optim import AdamW
+from torch.optim import AdamW, Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR, _LRScheduler
 from torch.nn.functional import mse_loss, l1_loss, smooth_l1_loss
 
@@ -7,6 +7,7 @@ from pytorch_lightning import LightningModule
 from torchmdnet.models.model import create_model, load_model
 import math
 
+from torchmdnet.utils import gen_fully_connected_with_hop, process_input
 
 class LNNP(LightningModule):
     def __init__(self, hparams, prior_model=None, mean=None, std=None):
@@ -77,8 +78,8 @@ class LNNP(LightningModule):
             raise ValueError(f"Unknown lr_schedule: {self.hparams.lr_schedule}")
         return [optimizer], [lr_scheduler]
 
-    def forward(self, z, pos, batch=None, batch_org=None):
-        return self.model(z, pos, batch=batch, batch_org=batch_org)
+    def forward(self, z, pos, batch=None, batch_org=None, egnn_dict=None):
+        return self.model(z, pos, batch=batch, batch_org=batch_org, egnn_dict=egnn_dict)
 
     def training_step(self, batch, batch_idx):
         if self.train_loss_type == 'smooth_l1_loss':
@@ -137,7 +138,26 @@ class LNNP(LightningModule):
                         self.process_batch_idx(batch)
                         pred, noise_pred, deriv = self(batch.z, batch.pos, batch.batch, batch_org=batch)
                     else:
-                        pred, noise_pred, deriv = self(batch.z, batch.pos, batch.batch)
+                        if self.hparams.model == 'egnn':
+                            batch_size, n_nodes, _ = batch.pos.size()
+                            atom_positions = batch.pos.view(batch_size, n_nodes, -1)
+                            atom_mask = batch.atom_mask.view(batch_size, n_nodes)
+                            charges = batch.z.to(torch.long)
+                            charges = charges.view(batch_size * n_nodes, -1)
+                            nodes = process_input(charges, max_atom_type=self.hparams.max_z, charge_power=2)
+                            nodes = nodes.view(batch_size * n_nodes, -1)
+                            edges, edge_types = gen_fully_connected_with_hop(atom_positions, atom_mask)
+                            edge_attr = torch.nn.functional.one_hot(edge_types, 4)
+                            label = batch.y
+                            atom_positions = atom_positions.view(batch_size * n_nodes, -1)
+                            atom_mask = atom_mask.view(batch_size * n_nodes, -1)
+                            
+                            egnn_dict = {"edges":edges, "edge_attr":edge_attr, "node_mask":atom_mask, "n_nodes":n_nodes}
+                            pred, noise_pred = self(nodes, atom_positions, egnn_dict=egnn_dict)
+                            pred = pred.unsqueeze(1)
+                            # pred, noise_pred = self.model.representation_model(h=nodes, x=atom_positions, edges=edges, edge_attr=edge_attr, node_mask=atom_mask, n_nodes=n_nodes, mean=self.model.mean, std=self.model.std)
+                        else:
+                            pred, noise_pred, deriv = self(batch.z, batch.pos, batch.batch)
 
         denoising_is_on = ("pos_target" in batch or "bond_target" in batch) and (self.hparams.denoising_weight > 0) and (noise_pred is not None)
 
@@ -246,11 +266,15 @@ class LNNP(LightningModule):
             else:
                 loss_fn = custom_mse_loss
             if self.model.pos_normalizer is not None:
-                normalized_pos_target = self.model.pos_normalizer(batch.pos_target)
-                if 'wg'in batch.keys:
-                    loss_pos = loss_fn(noise_pred, normalized_pos_target, weights)
+                if self.hparams.model == 'egnn':
+                    normalized_pos_target = batch.pos_target.reshape(-1, 3)[atom_mask.squeeze()]
+                    loss_pos = loss_fn(noise_pred[atom_mask.squeeze()], normalized_pos_target)
                 else:
-                    loss_pos = loss_fn(noise_pred, normalized_pos_target)
+                    normalized_pos_target = self.model.pos_normalizer(batch.pos_target)
+                    if 'wg'in batch.keys:
+                        loss_pos = loss_fn(noise_pred, normalized_pos_target, weights)
+                    else:
+                        loss_pos = loss_fn(noise_pred, normalized_pos_target)
                 self.losses[stage + "_pos"].append(loss_pos.detach())
             elif self.model.bond_pos_normalizer is not None:
                 # bond, angle, dihedral

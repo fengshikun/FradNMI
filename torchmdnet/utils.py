@@ -4,6 +4,9 @@ import numpy as np
 import torch
 from os.path import dirname, join, exists
 from pytorch_lightning.utilities import rank_zero_warn
+from torch import nn
+from typing import Any, Optional, Tuple, Union
+from torch import Tensor
 
 
 # code from equibind:
@@ -288,3 +291,216 @@ class DataLoaderMasking(torch.utils.data.DataLoader):
             shuffle,
             collate_fn=lambda data_list: BatchMasking.from_data_list(data_list),
             **kwargs)
+
+
+
+def batch_stack(props):
+    """
+    Stack a list of torch.tensors so they are padded to the size of the
+    largest tensor along each axis.
+
+    Parameters
+    ----------
+    props : list of Pytorch Tensors
+        Pytorch tensors to stack
+
+    Returns
+    -------
+    props : Pytorch tensor
+        Stacked pytorch tensor.
+
+    Notes
+    -----
+    TODO : Review whether the behavior when elements are not tensors is safe.
+    """
+    if not torch.is_tensor(props[0]):
+        return torch.tensor(props)
+    elif props[0].dim() == 0:
+        return torch.stack(props)
+    else:
+        return torch.nn.utils.rnn.pad_sequence(props, batch_first=True, padding_value=0)
+
+
+def drop_zeros(props, to_keep):
+    """
+    Function to drop zeros from batches when the entire dataset is padded to the largest molecule size.
+
+    Parameters
+    ----------
+    props : Pytorch tensor
+        Full Dataset
+
+
+    Returns
+    -------
+    props : Pytorch tensor
+        The dataset with  only the retained information.
+
+    Notes
+    -----
+    TODO : Review whether the behavior when elements are not tensors is safe.
+    """
+    if not torch.is_tensor(props[0]):
+        return props
+    elif props[0].dim() == 0:
+        return props
+    else:
+        return props[:, to_keep, ...]
+
+
+def collate_fn(batch):
+    """
+    Collation function that collates datapoints into the batch format for cormorant
+
+    Parameters
+    ----------
+    batch : list of datapoints
+        The data to be collated.
+
+    Returns
+    -------
+    batch : dict of Pytorch tensors
+        The collated data.
+    """
+    
+    aggate_keys = batch[0].keys
+
+    if 'name' in aggate_keys:
+        aggate_keys.remove('name')
+        aggate_keys.remove('edge_index')
+        aggate_keys.remove('edge_attr')
+        
+        
+        
+        
+    # for key in aggate_keys:
+    #     batch[key] = batch_stack([mol[key] for mol in batch])
+    
+    batch = {prop: batch_stack([mol[prop] for mol in batch]) for prop in aggate_keys}
+
+    to_keep = (batch['z'].sum(0) > 0)
+
+    # batch = {key: drop_zeros(prop, to_keep) for key, prop in batch.items()}
+    
+    aggate_keys = ['z', 'pos_target', 'pos']
+    for key in aggate_keys:
+        if key in batch:
+            batch[key] = drop_zeros(batch[key], to_keep)
+    
+    # batch = {key: drop_zeros(batch[key], to_keep) for key in batch.keys()}
+
+    atom_mask = batch['z'] > 0
+    batch['atom_mask'] = atom_mask
+
+    #Obtain edges
+    batch_size, n_nodes = atom_mask.size()
+    edge_mask = atom_mask.unsqueeze(1) * atom_mask.unsqueeze(2)
+
+    #mask diagonal
+    diag_mask = ~torch.eye(edge_mask.size(1), dtype=torch.bool).unsqueeze(0)
+    edge_mask *= diag_mask
+
+    #edge_mask = atom_mask.unsqueeze(1) * atom_mask.unsqueeze(2)
+    batch['edge_mask'] = edge_mask.view(batch_size * n_nodes * n_nodes, 1)
+
+    batch['y'] = batch['y'].reshape(-1, 1)
+
+    batch_res = Data()
+    
+    for k, v in batch.items():
+        batch_res[k] = v
+
+    return batch_res
+
+def process_input(atom_type,max_atom_type=100, charge_power=2):
+    one_hot = nn.functional.one_hot(atom_type, max_atom_type)
+    charge_tensor = (atom_type.unsqueeze(-1) / max_atom_type).pow(
+        torch.arange(charge_power + 1., dtype=torch.float32).to(atom_type))
+    charge_tensor = charge_tensor.view(atom_type.shape + (1, charge_power + 1))
+    atom_scalars = (one_hot.unsqueeze(-1) * charge_tensor).view(atom_type.shape + (-1,))
+    return atom_scalars
+
+def binarize(x):
+    return torch.where(x > 0.5, torch.ones_like(x), torch.zeros_like(x))
+
+
+def get_higher_order_adj_matrix(adj, order):
+    """
+    Args:
+        adj:        (N, N)
+        type_mat:   (N, N)
+    """
+
+    adj_mats = [torch.eye(adj.size(0), device=adj.device), \
+                binarize(adj + torch.eye(adj.size(0), device=adj.device))]
+    for i in range(2, order+1):
+        adj_mats.append(binarize(adj_mats[i-1] @ adj_mats[1]))
+    order_mat = torch.zeros_like(adj).float()
+
+    for i in range(1, order+1):
+        order_mat += (adj_mats[i] - adj_mats[i-1]) * i
+    return order_mat.long()
+
+def dense_to_sparse(adj: Tensor) -> Tuple[Tensor, Tensor]:
+    r"""Converts a dense adjacency matrix to a sparse adjacency matrix defined
+    by edge indices and edge attributes.
+
+    Args:
+        adj (Tensor): The dense adjacency matrix of shape
+            :obj:`[num_nodes, num_nodes]` or
+            :obj:`[batch_size, num_nodes, num_nodes]`.
+
+    :rtype: (:class:`LongTensor`, :class:`Tensor`)
+
+    Examples:
+
+        >>> # Forr a single adjacency matrix
+        >>> adj = torch.tensor([[3, 1],
+        ...                     [2, 0]])
+        >>> dense_to_sparse(adj)
+        (tensor([[0, 0, 1],
+                [0, 1, 0]]),
+        tensor([3, 1, 2]))
+
+        >>> # For two adjacency matrixes
+        >>> adj = torch.tensor([[[3, 1],
+        ...                      [2, 0]],
+        ...                     [[0, 1],
+        ...                      [0, 2]]])
+        >>> dense_to_sparse(adj)
+        (tensor([[0, 0, 1, 2, 3],
+                [0, 1, 0, 3, 3]]),
+        tensor([3, 1, 2, 1, 2]))
+    """
+    if adj.dim() < 2 or adj.dim() > 3:
+        raise ValueError(f"Dense adjacency matrix 'adj' must be 2- or "
+                         f"3-dimensional (got {adj.dim()} dimensions)")
+
+    edge_index = adj.nonzero().t()
+
+    if edge_index.size(0) == 2:
+        edge_attr = adj[edge_index[0], edge_index[1]]
+        return edge_index, edge_attr
+    else:
+        edge_attr = adj[edge_index[0], edge_index[1], edge_index[2]]
+        row = edge_index[1] + adj.size(-2) * edge_index[0]
+        col = edge_index[2] + adj.size(-1) * edge_index[0]
+        return torch.stack([row, col], dim=0), edge_attr
+
+
+
+
+def gen_fully_connected_with_hop(pos, mask):
+    batch, nodes = mask.shape
+    batch_adj = torch.norm(pos.unsqueeze(1) - pos.unsqueeze(2), p=2, dim=-1) # batch * n * n
+    batch_mask_fc = mask[:, :, None] * mask[:, None, :] # batch * n * n
+    # 1.6 is an empirically reasonable cutoff to distinguish the existence of bonds for stable small molecules
+    batch_mask = batch_mask_fc.bool() & (batch_adj <= 1.6) & (~torch.eye(nodes).to(mask).bool()) # batch * n * n
+    batch_mask = torch.block_diag(*batch_mask)
+    adj_order = get_higher_order_adj_matrix(batch_mask,3)
+    type_highorder = torch.where(adj_order > 1, adj_order, torch.zeros_like(adj_order))
+    fc_mask = batch_mask_fc.bool() & (~torch.eye(nodes).to(mask).bool())
+    fc_mask = torch.block_diag(*fc_mask)
+    type_new = batch_mask + type_highorder + fc_mask
+    edge_index, edge_type = dense_to_sparse(type_new)
+    return edge_index, edge_type - 1

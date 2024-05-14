@@ -57,6 +57,13 @@ def create_model(args, prior_model=None, mean=None, std=None):
             seperate_noise=args['seperate_noise'],
             **shared_args,
         )
+    elif args["model"] == "egnn":
+        from torchmdnet.models.egnn_clean import EGNN_finetune_last
+        is_equivariant = False    
+        representation_model = EGNN_finetune_last(
+            in_node_nf=300, hidden_nf=128, in_edge_nf=4, act_fn=nn.SiLU(), n_layers=7, residual=True, attention=True, normalize=False, tanh=False, use_layer_norm=False
+        )
+    
     else:
         raise ValueError(f'Unknown architecture: {args["model"]}')
 
@@ -315,7 +322,11 @@ class TorchMD_Net(nn.Module):
         if self.prior_model is not None:
             self.prior_model.reset_parameters()
 
-    def forward(self, z, pos, batch: Optional[torch.Tensor] = None, batch_org = None):
+    def forward(self, z, pos, batch: Optional[torch.Tensor] = None, batch_org = None, egnn_dict=None):
+        if egnn_dict is not None:
+            pred, noise_pred = self.representation_model(h=z, x=pos, edges=egnn_dict['edges'], edge_attr=egnn_dict['edge_attr'], node_mask=egnn_dict['node_mask'], n_nodes=egnn_dict['n_nodes'], mean=self.mean, std=self.std)
+            return pred, noise_pred
+        
         assert z.dim() == 1 and z.dtype == torch.long
         batch = torch.zeros_like(z) if batch is None else batch
 

@@ -8,7 +8,7 @@ from pytorch_lightning.utilities import rank_zero_warn
 from torchmdnet import datasets
 from torchmdnet.utils import make_splits, MissingEnergyException, DataLoaderMasking
 from torch_scatter import scatter
-
+from torchmdnet.utils import collate_fn
 
 class DataModule(LightningDataModule):
     def __init__(self, hparams, dataset=None):
@@ -20,6 +20,8 @@ class DataModule(LightningDataModule):
         self.dataset = dataset
 
         self.mask_atom = hparams.mask_atom
+        
+        self.model = hparams.model
 
     def setup(self, stage):
         if self.dataset is None:
@@ -155,13 +157,25 @@ class DataModule(LightningDataModule):
                 pin_memory=True,
             )
         else:
-            dl = DataLoader(
-                dataset=dataset,
-                batch_size=batch_size,
-                shuffle=shuffle,
-                num_workers=self.hparams["num_workers"],
-                pin_memory=True,
-            )
+            if self.model == 'egnn':
+                from torch.utils.data import DataLoader
+                dl = DataLoader(
+                    dataset=dataset,
+                    batch_size=batch_size,
+                    shuffle=shuffle,
+                    num_workers=self.hparams["num_workers"],
+                    pin_memory=True,
+                    collate_fn=collate_fn,
+                )
+            else:
+                from torch_geometric.data import DataLoader
+                dl = DataLoader(
+                    dataset=dataset,
+                    batch_size=batch_size,
+                    shuffle=shuffle,
+                    num_workers=self.hparams["num_workers"],
+                    pin_memory=True,
+                )
 
         if store_dataloader:
             self._saved_dataloaders[stage] = dl
