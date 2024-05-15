@@ -64,7 +64,12 @@ class DataModule(LightningDataModule):
                     else: # MD17A
                         dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"], transform=None, dihedral_angle_noise_scale=self.hparams['dihedral_angle_noise_scale'], position_noise_scale=self.hparams['position_noise_scale'], composition=self.hparams['composition'], reverse_half=self.hparams['reverse_half'], addh=self.hparams['addh'], cod_denoise=self.hparams['cod_denoise'])
                 else:
-                    dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"], transform=t)
+                    if self.hparams.model == 'painn':
+                        add_radius_edge = True
+                    else:
+                        add_radius_edge = False
+                    
+                    dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"], transform=t, add_radius_edge=add_radius_edge)
 
                 # Noisy version of dataset
                 self.dataset_maybe_noisy = dataset_factory(transform)

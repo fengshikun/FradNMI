@@ -14,9 +14,11 @@ from rdkit import Chem
 from torsion_utils import get_torsions, GetDihedral, apply_changes
 import copy
 from torch_geometric.data import Data
+from torch_geometric.nn import radius_graph
+
 
 class QM9(QM9_geometric):
-    def __init__(self, root, transform=None, dataset_arg=None):
+    def __init__(self, root, transform=None, dataset_arg=None, add_radius_edge=False):
         assert dataset_arg is not None, (
             "Please pass the desired property to "
             'train on via "dataset_arg". Available '
@@ -32,6 +34,9 @@ class QM9(QM9_geometric):
         else:
             transform = Compose([self._filter_label, transform])
 
+        self.add_radius_edge = add_radius_edge
+        if self.add_radius_edge:
+            self.radius = 5.0
         super(QM9, self).__init__(root, transform=transform)
 
     def get_atomref(self, max_z=100):
@@ -55,7 +60,13 @@ class QM9(QM9_geometric):
     def process(self):
         super(QM9, self).process()
 
-
+    # for debug
+    def __getitem__(self, idx: Union[int, np.integer, IndexType]) -> Union['Dataset', Data]:
+        org_data = super().__getitem__(idx)
+        if self.add_radius_edge: # mimic the painn
+            radius_edge_index = radius_graph(org_data.pos, r=self.radius, loop=False)
+            org_data.radius_edge_index = radius_edge_index
+        return org_data
 
 # Globle variable
 MOL_LST = None

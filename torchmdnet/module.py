@@ -78,8 +78,13 @@ class LNNP(LightningModule):
             raise ValueError(f"Unknown lr_schedule: {self.hparams.lr_schedule}")
         return [optimizer], [lr_scheduler]
 
-    def forward(self, z, pos, batch=None, batch_org=None, egnn_dict=None):
-        return self.model(z, pos, batch=batch, batch_org=batch_org, egnn_dict=egnn_dict)
+    def forward(self, z, pos, batch=None, batch_org=None, egnn_dict=None, radius_edge_index=None):
+        if self.hparams.model == 'egnn':
+            return self.model(z, pos, egnn_dict=egnn_dict)
+        elif self.hparams.model == 'painn':
+            return self.model(z, pos, batch=batch, batch_org=batch_org, radius_edge_index=radius_edge_index)
+        else:
+            return self.model(z, pos, batch=batch, batch_org=batch_org)
 
     def training_step(self, batch, batch_idx):
         if self.train_loss_type == 'smooth_l1_loss':
@@ -156,6 +161,8 @@ class LNNP(LightningModule):
                             pred, noise_pred = self(nodes, atom_positions, egnn_dict=egnn_dict)
                             pred = pred.unsqueeze(1)
                             # pred, noise_pred = self.model.representation_model(h=nodes, x=atom_positions, edges=edges, edge_attr=edge_attr, node_mask=atom_mask, n_nodes=n_nodes, mean=self.model.mean, std=self.model.std)
+                        elif self.hparams.model == 'painn':
+                            pred, noise_pred, _ = self(batch.z, batch.pos, radius_edge_index=batch.radius_edge_index, batch=batch.batch)
                         else:
                             pred, noise_pred, deriv = self(batch.z, batch.pos, batch.batch)
 

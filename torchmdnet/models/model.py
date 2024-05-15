@@ -63,7 +63,18 @@ def create_model(args, prior_model=None, mean=None, std=None):
         representation_model = EGNN_finetune_last(
             in_node_nf=300, hidden_nf=128, in_edge_nf=4, act_fn=nn.SiLU(), n_layers=7, residual=True, attention=True, normalize=False, tanh=False, use_layer_norm=False
         )
-    
+    elif args["model"] == "painn":
+        from torchmdnet.models.painn import PaiNN
+        is_equivariant = True
+        representation_model = PaiNN(
+            n_atom_basis=128,
+            n_interactions=3,
+            n_rbf=20,
+            cutoff=5.0,
+            max_z=100,
+            n_out=1,
+            readout='add',
+        )
     else:
         raise ValueError(f'Unknown architecture: {args["model"]}')
 
@@ -322,10 +333,11 @@ class TorchMD_Net(nn.Module):
         if self.prior_model is not None:
             self.prior_model.reset_parameters()
 
-    def forward(self, z, pos, batch: Optional[torch.Tensor] = None, batch_org = None, egnn_dict=None):
+    def forward(self, z, pos, batch: Optional[torch.Tensor] = None, batch_org = None, egnn_dict=None, radius_edge_index=None):
         if egnn_dict is not None:
             pred, noise_pred = self.representation_model(h=z, x=pos, edges=egnn_dict['edges'], edge_attr=egnn_dict['edge_attr'], node_mask=egnn_dict['node_mask'], n_nodes=egnn_dict['n_nodes'], mean=self.mean, std=self.std)
             return pred, noise_pred
+        
         
         assert z.dim() == 1 and z.dtype == torch.long
         batch = torch.zeros_like(z) if batch is None else batch
@@ -337,7 +349,10 @@ class TorchMD_Net(nn.Module):
             x, v, nv, z, pos, batch = self.representation_model(z, pos, batch=batch)
         else:
             # run the potentially wrapped representation model
-            x, v, z, pos, batch = self.representation_model(z, pos, batch=batch)
+            if radius_edge_index is not None:
+                x, v = self.representation_model(x=z, positions=pos, batch=batch, radius_edge_index=radius_edge_index)
+            else:
+                x, v, z, pos, batch = self.representation_model(z, pos, batch=batch)
             nv = None
 
 

@@ -1,1 +1,1 @@
-__all__ = ["graph-network", "transformer", "equivariant-transformer", "egnn"]
+__all__ = ["graph-network", "transformer", "equivariant-transformer", "egnn", "painn"]
