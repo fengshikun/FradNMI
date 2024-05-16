@@ -48,7 +48,7 @@ class DataModule(LightningDataModule):
                     dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], self.hparams['sdf_path'], self.hparams['position_noise_scale'], self.hparams['sample_number'], self.hparams['violate'], dataset_arg=self.hparams["dataset_arg"], transform=t)
                 elif 'PCQM4MV2_Force' in self.hparams['dataset']:
                     dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], self.hparams['sdf_path'], self.hparams['dihedral_angle_noise_scale'], self.hparams['angle_noise_scale'], self.hparams['bond_length_scale'], dataset_arg=self.hparams["dataset_arg"], transform=t)
-                elif 'Dihedral2' in self.hparams['dataset']:
+                elif 'Dihedral2' in self.hparams['dataset'] or 'Dihedral3' in self.hparams['dataset'] or 'Dihedral4' in self.hparams['dataset']:
                     if self.hparams.model == 'painn':
                         add_radius_edge = True
                     else:
