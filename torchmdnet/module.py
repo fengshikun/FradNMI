@@ -159,6 +159,7 @@ class LNNP(LightningModule):
                             
                             egnn_dict = {"edges":edges, "edge_attr":edge_attr, "node_mask":atom_mask, "n_nodes":n_nodes}
                             pred, noise_pred = self(nodes, atom_positions, egnn_dict=egnn_dict)
+                            noise_pred = noise_pred - atom_positions
                             pred = pred.unsqueeze(1)
                             # pred, noise_pred = self.model.representation_model(h=nodes, x=atom_positions, edges=edges, edge_attr=edge_attr, node_mask=atom_mask, n_nodes=n_nodes, mean=self.model.mean, std=self.model.std)
                         elif self.hparams.model == 'painn':
@@ -275,7 +276,9 @@ class LNNP(LightningModule):
             if self.model.pos_normalizer is not None:
                 if self.hparams.model == 'egnn':
                     normalized_pos_target = batch.pos_target.reshape(-1, 3)[atom_mask.squeeze()]
-                    loss_pos = loss_fn(noise_pred[atom_mask.squeeze()], normalized_pos_target)
+                    normalized_pos_target = self.model.pos_normalizer(normalized_pos_target)
+                    noise_pred = noise_pred[atom_mask.squeeze()]
+                    loss_pos = loss_fn(noise_pred, normalized_pos_target)
                 else:
                     normalized_pos_target = self.model.pos_normalizer(batch.pos_target)
                     if 'wg'in batch.keys:

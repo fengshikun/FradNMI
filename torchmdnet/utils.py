@@ -403,7 +403,8 @@ def collate_fn(batch):
     #edge_mask = atom_mask.unsqueeze(1) * atom_mask.unsqueeze(2)
     batch['edge_mask'] = edge_mask.view(batch_size * n_nodes * n_nodes, 1)
 
-    batch['y'] = batch['y'].reshape(-1, 1)
+    if 'y' in batch:
+        batch['y'] = batch['y'].reshape(-1, 1)
 
     batch_res = Data()
     

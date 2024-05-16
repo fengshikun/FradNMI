@@ -59,7 +59,7 @@ def create_model(args, prior_model=None, mean=None, std=None):
         )
     elif args["model"] == "egnn":
         from torchmdnet.models.egnn_clean import EGNN_finetune_last
-        is_equivariant = False    
+        is_equivariant = True    
         representation_model = EGNN_finetune_last(
             in_node_nf=300, hidden_nf=128, in_edge_nf=4, act_fn=nn.SiLU(), n_layers=7, residual=True, attention=True, normalize=False, tanh=False, use_layer_norm=False
         )

@@ -173,6 +173,11 @@ class EGNN_finetune_last(EGNN_last):
         self.graph_dec = nn.Sequential(nn.Linear(self.hidden_nf, self.hidden_nf),
                                        act_fn,
                                        nn.Linear(self.hidden_nf, 1))
+
+
+        self.noise_pred = nn.Sequential(nn.Linear(3, self.hidden_nf),
+                                       act_fn,
+                                       nn.Linear(self.hidden_nf, 3))
     
     def reset_parameters(self):
         pass
@@ -199,7 +204,8 @@ class EGNN_finetune_last(EGNN_last):
         if mean is not None:
             pred = pred + mean
         
-        return pred.squeeze(1), x_
+        xp = self.noise_pred(x)
+        return pred.squeeze(1), xp
 
 class EGNN_md_last(EGNN_last):
     def __init__(self, in_node_nf, hidden_nf, in_edge_nf=0, act_fn=nn.SiLU(), n_layers=4, residual=True, attention=False, normalize=False, tanh=False, mean=None, std=None):
