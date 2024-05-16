@@ -24,6 +24,7 @@ from torch_geometric.data import (InMemoryDataset, download_url, extract_zip,
 from torsion_utils import get_torsions, GetDihedral, apply_changes, get_rotate_order_info, add_equi_noise
 # , add_equi_noise_new
 from rdkit.Geometry import Point3D
+from torch_geometric.nn import radius_graph
 
 
 class PCQM4MV2_XYZ(InMemoryDataset):
@@ -348,7 +349,7 @@ EQ_EN_LST = None
 class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
     def __init__(self, root: str, sdf_path: str, dihedral_angle_noise_scale: float, position_noise_scale: float, composition: bool, decay=False, decay_coe=0.2, transform: Optional[Callable] = None,
                  pre_transform: Optional[Callable] = None,
-                 pre_filter: Optional[Callable] = None, dataset_arg: Optional[str] = None, equilibrium=False, eq_weight=False, cod_denoise=False, integrate_coord=False, addh=False, mask_atom=False, mask_ratio=0.15, bat_noise=False):
+                 pre_filter: Optional[Callable] = None, dataset_arg: Optional[str] = None, equilibrium=False, eq_weight=False, cod_denoise=False, integrate_coord=False, addh=False, mask_atom=False, mask_ratio=0.15, bat_noise=False, add_radius_edge=False):
         assert dataset_arg is None, "PCQM4MV2_Dihedral does not take any dataset args."
         super().__init__(root, transform, pre_transform, pre_filter)
         # self.suppl = Chem.SDMolSupplier(sdf_path)
@@ -394,6 +395,9 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
             if MOL_DEBUG_LST is None:
                 # MOL_DEBUG_LST = Chem.SDMolSupplier("pcqm4m-v2-train.sdf")
                 MOL_DEBUG_LST = np.load("mol_iter_all.npy", allow_pickle=True)
+        self.add_radius_edge = add_radius_edge
+        if self.add_radius_edge:
+            self.radius = 5.0
     
     def transform_noise(self, data, position_noise_scale):
         noise = torch.randn_like(torch.tensor(data)) * position_noise_scale
@@ -484,6 +488,10 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
             org_data.pos = torch.tensor(pos_noise_coords)
 
             
+            if self.add_radius_edge: # mimic the painn
+                radius_edge_index = radius_graph(org_data.pos, r=self.radius, loop=False)
+                org_data.radius_edge_index = radius_edge_index
+            
             if self.equilibrium:
                 org_data.w1 = weight
                 org_data.wg = torch.tensor([weight for _ in range(org_atom_num)], dtype=torch.float32)
@@ -560,6 +568,10 @@ class PCQM4MV2_Dihedral2(PCQM4MV2_XYZ):
             org_data.w1 = weight
             org_data.wg = torch.tensor([weight for _ in range(atom_num)], dtype=torch.float32)
 
+        if self.add_radius_edge: # mimic the painn
+            radius_edge_index = radius_graph(org_data.pos, r=self.radius, loop=False)
+            org_data.radius_edge_index = radius_edge_index
+        
         return org_data
 
 

@@ -49,7 +49,11 @@ class DataModule(LightningDataModule):
                 elif 'PCQM4MV2_Force' in self.hparams['dataset']:
                     dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], self.hparams['sdf_path'], self.hparams['dihedral_angle_noise_scale'], self.hparams['angle_noise_scale'], self.hparams['bond_length_scale'], dataset_arg=self.hparams["dataset_arg"], transform=t)
                 elif 'Dihedral2' in self.hparams['dataset']:
-                    dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], self.hparams['sdf_path'], self.hparams['dihedral_angle_noise_scale'], self.hparams['position_noise_scale'], self.hparams['composition'], self.hparams['decay'], self.hparams['decay_coe'], dataset_arg=self.hparams["dataset_arg"], equilibrium=self.hparams['equilibrium'], eq_weight=self.hparams['eq_weight'], cod_denoise=self.hparams['cod_denoise'], integrate_coord=self.hparams['integrate_coord'], addh=self.hparams['addh'], mask_atom=self.hparams['mask_atom'], mask_ratio=self.hparams['mask_ratio'], bat_noise=self.hparams['bat_noise'], transform=t)
+                    if self.hparams.model == 'painn':
+                        add_radius_edge = True
+                    else:
+                        add_radius_edge = False
+                    dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], self.hparams['sdf_path'], self.hparams['dihedral_angle_noise_scale'], self.hparams['position_noise_scale'], self.hparams['composition'], self.hparams['decay'], self.hparams['decay_coe'], dataset_arg=self.hparams["dataset_arg"], equilibrium=self.hparams['equilibrium'], eq_weight=self.hparams['eq_weight'], cod_denoise=self.hparams['cod_denoise'], integrate_coord=self.hparams['integrate_coord'], addh=self.hparams['addh'], mask_atom=self.hparams['mask_atom'], mask_ratio=self.hparams['mask_ratio'], bat_noise=self.hparams['bat_noise'], transform=t, add_radius_edge=add_radius_edge)
                 elif 'DihedralF' in self.hparams['dataset']:
                     dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], self.hparams['sdf_path'], self.hparams['dihedral_angle_noise_scale'], self.hparams['position_noise_scale'], self.hparams['composition'], self.hparams['force_field'], self.hparams['pred_noise'], cod_denoise=self.hparams['cod_denoise'], rdkit_conf=self.hparams['rdkit_conf'])
                 elif 'Dihedral' in self.hparams['dataset']:
