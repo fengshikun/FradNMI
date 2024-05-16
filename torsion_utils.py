@@ -1155,7 +1155,7 @@ def transform_noise(data, position_noise_scale=0.04):
     data_noise = data + noise.numpy()
     return data_noise
 
-def add_equi_noise_new(opt_mol, bond_var=0.04, angle_var=0.143, torsion_var_r=2.8, torsion_var=0.41, coord_var=0.04, add_ring_noise=False, add_noise_type=0, mol_param=None, ky=0):
+def add_equi_noise_new(opt_mol, bond_var=0.058, angle_var=0.129, torsion_var_r=1, torsion_var=0.18, coord_var=0.04, add_ring_noise=False, add_noise_type=0, mol_param=None, ky=0):
     # bond noise, find all bond add noise
     
     org_conf = opt_mol.GetConformer()
