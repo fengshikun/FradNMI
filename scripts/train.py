@@ -162,6 +162,11 @@ def get_args():
     parser.add_argument('--standardize', type=str2bool, default=False, help='If true, multiply prediction by dataset std and add mean')
     parser.add_argument('--reduce-op', type=str, default='add', choices=['add', 'mean'], help='Reduce operation to apply to atomic predictions')
     # fmt: on
+    
+    
+    # parameters for egnn,
+    parser.add_argument('--hidden-nf', type=int, default=128, help='hidden node feature size of egnn')
+    parser.add_argument('--n-layers', type=int, default=7, help='layers number of egnn')
 
     args = parser.parse_args()
 
