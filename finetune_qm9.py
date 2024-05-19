@@ -11,6 +11,8 @@
 
 
 # python finetune_qm9.py --pretrain_model /data/protein/SKData/Frad_NMI/FradNMI/experiments/frad_pretraining_rdkit_10w/step=11407-epoch=7-val_loss=0.2023-test_loss=0.2045-train_per_step=0.1883.ckpt --job_prefix frad_pretraining_rdkit_10w --start_gid 0
+
+# python finetune_qm9.py --pretrain_model /data/protein/SKData/Frad_NMI/FradNMI/experiments/frad_pretraining_denoise_angle/step=386103-epoch=7-val_loss=0.2156-test_loss=0.2038-train_per_step=0.1778.ckpt --job_prefix frad_pretraining_denoise_angle --start_gid 4
 import os
 import argparse
 
@@ -55,10 +57,23 @@ QM9_CMD = [
     
 ]
 
+QM9_CMD = [
+    '{} python -u scripts/train.py --conf examples/ET-QM9-FT-nt_dw_0.2_long.yaml --layernorm-on-vec whitened --job-id {}_energy_U0 --dataset-arg energy_U0 --pretrained-model {} {} > {}.log 2>&1 &',
+    
+    '{} python -u scripts/train.py --conf examples/ET-QM9-FT-nt_dw_0.2_long.yaml --layernorm-on-vec whitened --job-id {}_energy_U --dataset-arg energy_U --pretrained-model {} {} > {}.log 2>&1 &',
+    
+    '{} python -u scripts/train.py --conf examples/ET-QM9-FT-nt_dw_0.2_long.yaml --layernorm-on-vec whitened --job-id {}_enthalpy_H --dataset-arg enthalpy_H --pretrained-model {} {} > {}.log 2>&1 &',
+    
+    '{} python -u scripts/train.py --conf examples/ET-QM9-FT-nt_dw_0.2_long.yaml --layernorm-on-vec whitened --job-id {}_free_energy --dataset-arg free_energy --pretrained-model {} {} > {}.log 2>&1 &',
+]
+
+
 # qm9_task = {'homo': 2, 'gap': 4}
 # qm9_task = {'lumo': 3}
 
 qm9_task = {'lumo': 0, 'homo': 1, 'gap': 2}
+
+qm9_task = {'energy_U0': 0, 'energy_U': 1, 'enthalpy_H': 2, 'free_energy': 3}
 
 
 if __name__ == "__main__":
