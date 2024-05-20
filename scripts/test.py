@@ -18,6 +18,7 @@ from torchmdnet.models import output_modules
 from torchmdnet.models.utils import rbf_class_mapping, act_class_mapping
 from torchmdnet.utils import LoadFromFile, LoadFromCheckpoint, save_argparse, number
 from pathlib import Path
+from pytorch_lightning.strategies.ddp import DDPStrategy
 import wandb
 
 
@@ -143,6 +144,9 @@ def get_args():
     parser.add_argument('--max-num-neighbors', type=int, default=32, help='Maximum number of neighbors to consider in the network')
     parser.add_argument('--standardize', type=bool, default=False, help='If true, multiply prediction by dataset std and add mean')
     parser.add_argument('--reduce-op', type=str, default='add', choices=['add', 'mean'], help='Reduce operation to apply to atomic predictions')
+    
+    
+    parser.add_argument('--bond-length-scale', default=0., type=float, help='bond length scale.')
     # fmt: on
 
     args = parser.parse_args()
@@ -200,7 +204,8 @@ def main():
         dirpath=args.log_dir,
         monitor="val_loss",
         save_top_k=args.save_top_k,  # -1 to save all
-        period=args.save_interval,
+        every_n_epochs=args.save_interval,
+        # period=args.save_interval,
         filename="{step}-{epoch}-{val_loss:.4f}-{test_loss:.4f}-{train_per_step:.4f}",
         save_last=True,
     )
@@ -219,9 +224,12 @@ def main():
 
     log_code()
 
+    # ddp_plugin = None
+    # if "ddp" in args.distributed_backend:
+    #     ddp_plugin = DDPPlugin(find_unused_parameters=False, num_nodes=args.num_nodes)
     ddp_plugin = None
     if "ddp" in args.distributed_backend:
-        ddp_plugin = DDPPlugin(find_unused_parameters=False, num_nodes=args.num_nodes)
+        ddp_plugin = DDPStrategy(find_unused_parameters=True)
 
     trainer = pl.Trainer(
         max_epochs=args.num_epochs,
@@ -235,8 +243,10 @@ def main():
         resume_from_checkpoint=args.load_model,
         callbacks=[early_stopping, checkpoint_callback],
         logger=[tb_logger, csv_logger, wandb_logger],
-        reload_dataloaders_every_epoch=False,
+        reload_dataloaders_every_n_epochs=1,
+        # reload_dataloaders_every_epoch=False,
         precision=args.precision,
+        strategy=ddp_plugin,
         # plugins=[ddp_plugin],
     )
 
