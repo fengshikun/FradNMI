@@ -175,9 +175,13 @@ class EGNN_finetune_last(EGNN_last):
                                        nn.Linear(self.hidden_nf, 1))
 
 
-        self.noise_pred = nn.Sequential(nn.Linear(3, self.hidden_nf),
+        self.noise_pred = nn.Sequential(nn.Linear(self.hidden_nf, self.hidden_nf),
                                        act_fn,
                                        nn.Linear(self.hidden_nf, 3))
+
+        # self.noise_pred = nn.Sequential(nn.Linear(3, self.hidden_nf),
+        #                                act_fn,
+        #                                nn.Linear(self.hidden_nf, 3))
     
     def reset_parameters(self):
         pass
@@ -188,6 +192,9 @@ class EGNN_finetune_last(EGNN_last):
     def forward(self, h, x, edges, edge_attr, n_nodes, edge_mask=None, node_mask=None, adapter=None, mean=None, std=None):
         x_ = x.clone()
         h, x = EGNN_last.forward(self, h, x, edges, edge_attr, edge_mask=edge_mask)
+        
+        xp = self.noise_pred(h)
+        
         h = self.node_dec(h)
         if node_mask is not None:
             h = h * node_mask
@@ -204,7 +211,7 @@ class EGNN_finetune_last(EGNN_last):
         if mean is not None:
             pred = pred + mean
         
-        xp = self.noise_pred(x)
+        
         return pred.squeeze(1), xp
 
 class EGNN_md_last(EGNN_last):

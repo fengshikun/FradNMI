@@ -147,6 +147,12 @@ def get_args():
     
     
     parser.add_argument('--bond-length-scale', default=0., type=float, help='bond length scale.')
+    
+    
+    parser.add_argument('--infer-mode', default=1., type=int, help='infer mode to keep the result')
+    
+    parser.add_argument('--output-file', default='results.csv', type=str, help='output file')
+    
     # fmt: on
 
     args = parser.parse_args()

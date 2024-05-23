@@ -67,6 +67,8 @@ class DataModule(LightningDataModule):
                         dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"], transform=None, dihedral_angle_noise_scale=self.hparams['dihedral_angle_noise_scale'], position_noise_scale=self.hparams['position_noise_scale'], composition=self.hparams['composition'], transform_y=transform_y)
                     else: # MD17A
                         dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"], transform=None, dihedral_angle_noise_scale=self.hparams['dihedral_angle_noise_scale'], position_noise_scale=self.hparams['position_noise_scale'], composition=self.hparams['composition'], reverse_half=self.hparams['reverse_half'], addh=self.hparams['addh'], cod_denoise=self.hparams['cod_denoise'])
+                elif 'TestData' in self.hparams['dataset']:
+                    dataset_factory = lambda t: getattr(datasets, self.hparams["dataset"])(self.hparams["dataset_root"], dataset_arg=self.hparams["dataset_arg"], transform=None)
                 else:
                     if self.hparams.model == 'painn':
                         add_radius_edge = True
@@ -109,6 +111,9 @@ class DataModule(LightningDataModule):
             self.val_dataset = Subset(self.dataset, self.idx_val)
             self.test_dataset = Subset(self.dataset, self.idx_test)
 
+        if hasattr(self.hparams, "infer_mode"):
+            self.test_dataset = self.dataset
+        
         if self.hparams["standardize"]:
             self._standardize()
 

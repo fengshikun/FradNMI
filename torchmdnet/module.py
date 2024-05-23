@@ -17,6 +17,9 @@ class LNNP(LightningModule):
         if self.hparams.load_model:
             self.model = load_model(self.hparams.load_model, args=self.hparams)
         elif self.hparams.pretrained_model:
+            if hasattr(self.hparams, 'infer_mode') and self.hparams.infer_mode:
+                mean = None
+                std = None # use the loaded mean instead of the mean from the dataset
             self.model = load_model(self.hparams.pretrained_model, args=self.hparams, mean=mean, std=std)
         else:
             self.model = create_model(self.hparams, prior_model, mean, std)
@@ -237,6 +240,13 @@ class LNNP(LightningModule):
                 self.losses["test_y_mae"].append(y_mae.detach())
                 self.losses["test_y_rmse"].append(y_rmse.detach())
             else:
+                if hasattr(self.hparams, 'infer_mode'):
+                    new_res = pred.squeeze().tolist()
+                    if isinstance(new_res, list):
+                        self.losses['pred_values'].extend(new_res) # save the pred value
+                    else:
+                        self.losses['pred_values'].append(new_res) # save the pred value
+                    # self.losses['pred_values'].extend(pred.squeeze().tolist()) # save the pred value
                 loss_y = loss_fn(pred, batch.y)
             if torch.isnan(loss_y).sum():
                 print('loss nan happens')
@@ -363,6 +373,11 @@ class LNNP(LightningModule):
                 self.trainer.reset_val_dataloader(self)
 
     def test_epoch_end(self, outputs):
+        if hasattr(self.hparams, 'infer_mode') and self.hparams.infer_mode:
+            # save the pred values to text file
+            with open(self.hparams.output_file, 'w') as f:
+                for item in self.losses['pred_values']:
+                    f.write("%s\n" % item)
         result_dict = {}
         if len(self.losses["test_y"]) > 0:
             result_dict["test_loss_y"] = torch.stack(
@@ -492,6 +507,7 @@ class LNNP(LightningModule):
             "test_dy_mae": [],
             "test_dy_rmse": [],
 
+            "pred_values": [], # for test
         }
 
     def _reset_ema_dict(self):

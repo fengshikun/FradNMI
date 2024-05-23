@@ -13,7 +13,7 @@ from rdkit import Chem
 
 from torsion_utils import get_torsions, GetDihedral, apply_changes
 import copy
-from torch_geometric.data import Data
+from torch_geometric.data import Data, InMemoryDataset
 from torch_geometric.nn import radius_graph
 
 
@@ -218,3 +218,34 @@ class QM9A(QM9_geometric):
 
     def process(self):
         super(QM9, self).process()
+
+
+class TestData(InMemoryDataset):
+    def __init__(self, root, transform=None, dataset_arg=None):
+        
+        self.atom_lists = []
+        self.pos_lists = []
+        with open(root, 'r') as f:
+            lines = f.readlines()
+            for line in lines[1:]:
+                atom_list, pos_list = line.split('\t')
+                self.atom_lists.append(eval(atom_list))
+                self.pos_lists.append(eval(pos_list))
+        
+        self.length = len(self.atom_lists)
+
+    def __len__(self):
+        return self.length
+
+    # for debug
+    def __getitem__(self, idx: Union[int, np.integer, IndexType]) -> Union['Dataset', Data]:
+        res_data = Data()
+        if isinstance(idx, torch.Tensor):
+            idx = idx.item()
+        res_data.z = torch.tensor(self.atom_lists[idx], dtype=torch.long)
+        res_data.org_pos = torch.tensor(self.pos_lists[idx], dtype=torch.float32)
+        res_data.pos = torch.tensor(self.pos_lists[idx], dtype=torch.float32)
+        res_data.y = torch.tensor([0.0], dtype=torch.float32)
+        
+        
+        return res_data
