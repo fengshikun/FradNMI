@@ -78,6 +78,19 @@ def create_model(args, prior_model=None, mean=None, std=None):
             n_out=1,
             readout='add',
         )
+    elif args["model"] == "equivariant-transformerf2d":
+        from torchmdnet.models.torchmd_etf2d import TorchMD_ETF2D
+
+        is_equivariant = True
+        representation_model = TorchMD_ETF2D(
+            attn_activation=args["attn_activation"],
+            num_heads=args["num_heads"],
+            distance_influence=args["distance_influence"],
+            layernorm_on_vec=args["layernorm_on_vec"],
+            md17=args["md17"],
+            seperate_noise=args['seperate_noise'],
+            **shared_args,
+        )
     else:
         raise ValueError(f'Unknown architecture: {args["model"]}')
 

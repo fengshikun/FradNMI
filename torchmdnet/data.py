@@ -9,6 +9,7 @@ from torchmdnet import datasets
 from torchmdnet.utils import make_splits, MissingEnergyException, DataLoaderMasking
 from torch_scatter import scatter
 from torchmdnet.utils import collate_fn
+import os
 
 class DataModule(LightningDataModule):
     def __init__(self, hparams, dataset=None):
@@ -25,6 +26,42 @@ class DataModule(LightningDataModule):
 
     def setup(self, stage):
         if self.dataset is None:
+            if "LBADataset" in self.hparams["dataset"]:
+                # special for the atom3d LBA task
+                if self.hparams['position_noise_scale'] > 0.:
+                    def transform(data):
+                            noise = torch.randn_like(data.pos) * self.hparams['position_noise_scale']
+                            data.pos_target = noise
+                            data.pos = data.pos + noise
+                            if self.hparams["prior_model"] == "Atomref":
+                                data.y = self.get_energy_data(data)
+                            return data
+                else:
+                    transform = None
+
+                
+                dataset_factory = getattr(datasets, self.hparams["dataset"])
+                
+                if self.hparams["dataset"] == 'LBADataset':
+                    self.train_dataset = dataset_factory(os.path.join(self.hparams["dataset_root"], "lba_train.npy"), transform_noise=transform, lp_sep=self.hparams['lp_sep'], use_lig_feat=self.hparams['use_uni_feat'])
+                    self.val_dataset = dataset_factory(os.path.join(self.hparams["dataset_root"], "lba_valid.npy"), transform_noise=None, lp_sep=self.hparams['lp_sep'], use_lig_feat=self.hparams['use_uni_feat'])
+                    self.test_dataset = dataset_factory(os.path.join(self.hparams["dataset_root"], "lba_test.npy"), transform_noise=None, lp_sep=self.hparams['lp_sep'], use_lig_feat=self.hparams['use_uni_feat'])
+                else:
+                    # self.train_dataset = dataset_factory(os.path.join(self.hparams["dataset_root"], "train"))
+                    # self.val_dataset = dataset_factory(os.path.join(self.hparams["dataset_root"], "val"))
+                    # self.test_dataset = dataset_factory(os.path.join(self.hparams["dataset_root"], "test"))
+                    self.train_dataset = dataset_factory(os.path.join(self.hparams["dataset_root"], "train_data.pk"))
+                    self.val_dataset = dataset_factory(os.path.join(self.hparams["dataset_root"], "val_data.pk"))
+                    self.test_dataset = dataset_factory(os.path.join(self.hparams["dataset_root"], "test_data.pk"))
+
+                # normalize
+                if self.hparams["standardize"]:
+                    self._standardize()                
+
+
+                return
+            
+            
             if self.hparams["dataset"] == "Custom":
                 self.dataset = datasets.Custom(
                     self.hparams["coord_files"],

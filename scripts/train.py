@@ -163,6 +163,10 @@ def get_args():
     parser.add_argument('--reduce-op', type=str, default='add', choices=['add', 'mean'], help='Reduce operation to apply to atomic predictions')
     # fmt: on
     
+    # for lba
+    parser.add_argument('--lp-sep', type=bool, default=False, help='If true, multiply prediction by dataset std and add mean')
+    parser.add_argument('--use-uni-feat', type=bool, default=False, help='use uni lig feature')
+    
     
     # parameters for egnn,
     parser.add_argument('--hidden-nf', type=int, default=128, help='hidden node feature size of egnn')

@@ -6,6 +6,9 @@ from torch.nn.functional import mse_loss, l1_loss, smooth_l1_loss
 from pytorch_lightning import LightningModule
 from torchmdnet.models.model import create_model, load_model
 import math
+from scipy.stats import spearmanr
+from scipy.stats import pearsonr
+import numpy as np
 
 from torchmdnet.utils import gen_fully_connected_with_hop, process_input
 
@@ -42,6 +45,8 @@ class LNNP(LightningModule):
         self.bond_length_scale = self.hparams.bond_length_scale
         if self.bond_length_scale > 0:
             pass
+        
+        self.dataset = self.hparams['dataset'] # LBADataset
 
     def configure_optimizers(self):
         optimizer = AdamW(
@@ -248,6 +253,32 @@ class LNNP(LightningModule):
                         self.losses['pred_values'].append(new_res) # save the pred value
                     # self.losses['pred_values'].extend(pred.squeeze().tolist()) # save the pred value
                 loss_y = loss_fn(pred, batch.y)
+            
+            
+            if 'LBADataset' in self.dataset and stage in ['val', 'test']:
+                if stage == 'test':
+                    self.losses['lba_pred_org'].append(pred.detach())
+                    self.losses['lba_y_org'].append(batch.y)
+
+                    batch_size = batch.y.size(0)
+                    noise_pock_mean = []
+                    noise_lig_mean = []
+                    noise_all_mean = []
+                    for i in range(batch_size):
+                        noise_pred_ele = noise_pred[batch.batch==i]
+                        noise_pred_ele_pocket = noise_pred_ele[:batch.pocket_atomsnum[i]]
+                        noise_pred_ele_lig = noise_pred_ele[batch.pocket_atomsnum[i]:]
+                        noise_all_mean.append(noise_pred_ele.mean())
+                        noise_pock_mean.append(noise_pred_ele_pocket.mean())
+                        noise_lig_mean.append(noise_pred_ele_lig.mean())
+
+                    self.losses['noise_all_mean'].append(torch.tensor(noise_all_mean))
+                    self.losses['noise_pock_mean'].append(torch.tensor(noise_pock_mean))
+                    self.losses['noise_lig_mean'].append(torch.tensor(noise_lig_mean))
+                else:
+                    self.losses['lba_pred_org_val'].append(pred.detach())
+                    self.losses['lba_y_org_val'].append(batch.y)
+            
             if torch.isnan(loss_y).sum():
                 print('loss nan happens')
 
@@ -371,6 +402,17 @@ class LNNP(LightningModule):
                 # reset validation dataloaders before and after testing epoch, which is faster
                 # than skipping test validation steps by returning None
                 self.trainer.reset_val_dataloader(self)
+    
+    def compute_metrics_lba(self, predictions, targets):
+        predictions = predictions.cpu().numpy()
+        targets = targets.cpu().numpy()
+
+        spearman_corr, _ = spearmanr(predictions, targets)
+        rmse = np.sqrt(np.mean((predictions-targets)**2))
+        # rmse = torch.sqrt(torch.mean((predictions - targets) ** 2))
+        pearson_corr, _ = pearsonr(predictions.flatten(), targets.flatten())
+        
+        return spearman_corr, rmse, pearson_corr
 
     def test_epoch_end(self, outputs):
         if hasattr(self.hparams, 'infer_mode') and self.hparams.infer_mode:
@@ -383,7 +425,11 @@ class LNNP(LightningModule):
             result_dict["test_loss_y"] = torch.stack(
                 self.losses["test_y"]
             ).mean()
-    
+        if len(self.losses["lba_pred_org"]) > 0:
+            lba_pred_org = torch.concat(self.losses["lba_pred_org"])
+            lba_y_org = torch.concat(self.losses["lba_y_org"])
+        return result_dict
+
     # TODO(shehzaidi): clean up this function, redundant logging if dy loss exists.
     def validation_epoch_end(self, validation_step_outputs):
         if not self.trainer.sanity_checking:
@@ -425,6 +471,56 @@ class LNNP(LightningModule):
                     self.losses["test_y"]
                 ).mean()
 
+            
+            if len(self.losses["lba_pred_org"]) > 0:
+
+                lba_pred_org = torch.concat(self.losses["lba_pred_org"])
+                lba_y_org = torch.concat(self.losses["lba_y_org"])
+
+                if 'ChEMBL' in self.dataset: # for test
+                    lba_pred_org_global = self.all_gather(lba_pred_org).permute(1, 2, 0)
+                    lba_y_org_global = self.all_gather(lba_y_org).permute(1, 2, 0)
+                    lba_pred_org_global = lba_pred_org_global.flatten()
+                    lba_y_org_global = lba_y_org_global.flatten()
+                    if self.trainer.is_global_zero:
+                        # self.compute_metrics_ChEMBL(lba_pred_org_global, lba_pred_org_global, stage='test', Glid_dict_file='/data/protein/SKData/ChEMBL_dataset_sample/Glid_score_dict.pkl', Exp_dict_file='/data/protein/SKData/ChEMBL_dataset_sample/PDB_Exp_values_dict.pkl', test_glid_exp=True, test_score=True)
+                        # result_dict_tmp = self.compute_metrics_ChEMBL(lba_pred_org_global, lba_pred_org_global, stage='test')
+                        result_dict_tmp = self.compute_metrics_ChEMBL(lba_pred_org_global, lba_pred_org_global, stage='test', Glid_dict_file='/data/protein/SKData/ChEMBL_dataset_sample/Glid_score_dict.pkl', Exp_dict_file='/data/protein/SKData/ChEMBL_dataset_sample/PDB_Exp_values_dict.pkl', test_glid_exp=True, test_score=True)
+                        result_dict = {**result_dict, **result_dict_tmp}
+                        print(result_dict_tmp)
+                    self.trainer.strategy.barrier()
+                else:
+                    spearman_corr, rmse, pearson_corr = self.compute_metrics_lba(lba_pred_org, lba_y_org)
+                    result_dict["test_rmse_y"] = rmse
+                    result_dict["test_spearman"] = spearman_corr
+                    result_dict["test_pearson"] = pearson_corr
+            
+            if len(self.losses["lba_pred_org_val"]) > 0: # for validation
+
+                lba_pred_org = torch.concat(self.losses["lba_pred_org_val"])
+                lba_y_org = torch.concat(self.losses["lba_y_org_val"])
+                if 'ChEMBL' in self.dataset:
+                    print(f'trainner rank {self.trainer.global_rank}, lba_y_org shape f{lba_y_org.shape}')
+                    lba_pred_org_global = self.all_gather(lba_pred_org).permute(1, 2, 0)
+                    lba_y_org_global = self.all_gather(lba_y_org).permute(1, 2, 0)
+                    print(f"lba_pred_org_global shape is {lba_pred_org_global.shape}, lba_y_org_global shape is {lba_y_org_global.shape}")
+                    lba_pred_org_global = lba_pred_org_global.flatten()
+                    lba_y_org_global = lba_y_org_global.flatten()
+                    if self.trainer.is_global_zero:
+                        print(f'flatten val lba_pred_org_global shape {lba_pred_org_global.shape}')
+                        # result_dict_tmp = self.compute_metrics_ChEMBL(lba_pred_org_global, lba_y_org_global, stage='valid')
+                        result_dict_tmp = self.compute_metrics_ChEMBL(lba_pred_org_global, lba_pred_org_global, stage='valid', Glid_dict_file='/data/protein/SKData/ChEMBL_dataset_sample/Glid_score_dict.pkl', Exp_dict_file='/data/protein/SKData/ChEMBL_dataset_sample/PDB_Exp_values_dict.pkl', test_glid_exp=True, test_score=True, test_assay_file_path='/data/protein/SKData/ChEMBL_dataset_sample/val_assays.lst')
+                        print(result_dict_tmp)
+                        result_dict = {**result_dict, **result_dict_tmp}
+                    self.trainer.strategy.barrier()
+                else:
+                    spearman_corr, rmse, pearson_corr = self.compute_metrics_lba(lba_pred_org, lba_y_org)
+                    result_dict["val_rmse_y"] = rmse
+                    result_dict["val_spearman"] = spearman_corr
+                    result_dict["val_pearson"] = pearson_corr
+
+            
+            
             # if denoising is present, also log it
             if len(self.losses["train_pos"]) > 0:
                 result_dict["train_loss_pos"] = torch.stack(
@@ -506,6 +602,14 @@ class LNNP(LightningModule):
             "test_y_rmse": [],
             "test_dy_mae": [],
             "test_dy_rmse": [],
+            
+            "lba_pred_org": [],
+            "lba_pred_org_val": [],
+            "lba_y_org": [],
+            "lba_y_org_val": [],
+            "noise_all_mean": [],
+            "noise_pock_mean": [],
+            "noise_lig_mean": [],
 
             "pred_values": [], # for test
         }
