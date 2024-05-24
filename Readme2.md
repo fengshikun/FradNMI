@@ -26,7 +26,7 @@ omegaconf           2.3.0
 tqdm                4.66.2
 ```
 
-Additionally, we have updated a Conda environment package available at [URL]. You can download the environment package and unzip it into the 'envs' directory of Conda.
+Additionally, we have updated a Conda environment package available at [google drive](https://drive.google.com/file/d/1X9gUELR6UAifUT7VVtgur2ZWfCGl7kcF/view?usp=sharing). You can download the environment package and unzip it into the 'envs' directory of Conda.
 
 ## Quick Start
 
@@ -62,7 +62,7 @@ CUDA_VISIBLE_DEVICES=0 python scripts/test.py --conf examples/ET-QM9-FT_dw_0.2_l
 
 ## Reproduce
 
-### Data assets
+### Assets
 
 | Dataset   | Reference                                                                                                    |
 |-----------|--------------------------------------------------------------------------------------------------------------|
@@ -73,31 +73,21 @@ CUDA_VISIBLE_DEVICES=0 python scripts/test.py --conf examples/ET-QM9-FT_dw_0.2_l
 | ISO17     | [Quantum Machine](http://quantum-machine.org/datasets/)                                                     |
 | LBA       | [Zenodo](https://zenodo.org/records/4914718)                                                                |
 
+Additionally, we offer the download link for the processed finetuned data at the following URL: [google drive](https://drive.google.com/drive/folders/1qe8EwXSnZ-K8dFaa5HQwWBmFpYYFe2Gn?usp=sharing)
 
 
-### Pretraining
+Pretrained models for various tasks are available at the following links:
 
-Rotation Noise (Model for the QM9)
+- Pretrained model for QM9: [google drive](https://drive.google.com/drive/folders/1sFH7s_L3hqW4HhR7CC8TBUKjwUeslex1?usp=sharing)
+- Pretrained model for Force Predictioin(MD17, MD22, ISO17): [google drive](https://drive.google.com/drive/folders/18O-XaubUg_XMImAwnqSidaL0-TLszF3F?usp=sharing)
+- Pretrained model for LBA: [google drive](https://drive.google.com/drive/folders/1Z32LO0p1MkF4NTILPzdKH2rIoRmf0ZE6?usp=sharing)
 
-```
-python -u scripts/train.py --conf examples/ET-PCQM4MV2_dih_var0.04_var2_com_re.yaml --layernorm-on-vec whitened --job-id frad_pretraining --num-epochs 8 
-```
-
-Vibration and Rotation (VR) Noise (Model for Atomic Forces Tasks like md17, md22, iso17)
-
-```
-python -u scripts/train.py --conf examples/ET-PCQM4MV2_var0.4_var2_com_re_md17.yaml --layernorm-on-vec whitened --job-id frad_pretraining_force --num-epochs 8 --bat-noise true
-```
-
-We have provided the pretrained models at the following links:
-
-Rotation Noise: [https://drive.google.com/file/d/1O6f6FzYogBS2Mp4XsdAAEN4arLtLH38G/view?usp=sharing]
-
-Vibration and Rotation (VR) Noise: [https://drive.google.com/file/d/12ZNPNnugD3ZxQPTMUKVNkEl3-fLjHBgJ/view?usp=sharing]
 
 
 
 ### Finetuning
+
+
 
 #### Finetune on QM9
 
@@ -134,4 +124,19 @@ python -u scripts/train.py --conf examples/ET-ISO17.yaml --batch-size 256 --job-
 Below is the script for fine-tuning the LBA task.
 ```bash
 python -u scripts/train.py --conf examples/ET-LBA-FT_long_f2d.yaml --layernorm-on-vec whitened --job-id LBA --dataset-root $LBA_DATA_PATH --pretrained-model $pretrain_model_path
+```
+
+
+### Pretraining
+
+Rotation Noise (Model for the QM9)
+
+```
+python -u scripts/train.py --conf examples/ET-PCQM4MV2_dih_var0.04_var2_com_re.yaml --layernorm-on-vec whitened --job-id frad_pretraining --num-epochs 8 
+```
+
+Vibration and Rotation (VR) Noise (Model for Atomic Forces Tasks like md17, md22, iso17)
+
+```
+python -u scripts/train.py --conf examples/ET-PCQM4MV2_var0.4_var2_com_re_md17.yaml --layernorm-on-vec whitened --job-id frad_pretraining_force --num-epochs 8 --bat-noise true
 ```
