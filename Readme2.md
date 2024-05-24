@@ -52,7 +52,7 @@ python convert_smiles_pos.py --smiles_file=smiles.lst --output_file smiles_coord
 
 2. Utilize the fine-tuned model for prediction
 
-Download the fine-tuned model for either the gap property from this URL or the lumo property from this URL.
+Download the fine-tuned model for either the gap property from this [URL](https://drive.google.com/file/d/14yxjvgbkRodDr6wn3qh4tqIijPMTqXCl/view?usp=sharing) or the lumo property from this [URL](https://drive.google.com/file/d/1pa2daJQk-Xvh8Mj0_YcQahbymE1BKftb/view?usp=sharing).
 
 Execute the following command for property prediction. The prediction results will be stored in `results.csv`:
 
