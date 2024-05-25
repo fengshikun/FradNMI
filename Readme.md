@@ -94,7 +94,7 @@ Pretrained models for various tasks are available at the following links:
 Below is the script for fine-tuning the QM9 task. Ensure to replace `pretrain_model_path` with the actual model path. In this script, the subtask is set to 'homo', but it can be replaced with other subtasks as well.
 
 ```bash
-python -u scripts/train.py --conf examples/ET-QM9-FT_dw_0.2_long.yaml --layernorm-on-vec whitened --job-id frad_homo --dataset-arg homo  --denoising-weight 0.1 --dataset-root $datapath --pretrained-model $pretrain_model_path
+CUDA_VISIBLE_DEVICES=0 python -u scripts/train.py --conf examples/ET-QM9-FT_dw_0.2_long.yaml --layernorm-on-vec whitened --job-id frad_homo --dataset-arg homo  --denoising-weight 0.1 --dataset-root $datapath --pretrained-model $pretrain_model_path
 ```
 
 
@@ -103,27 +103,27 @@ Below is the script for fine-tuning the MD17 task. Replace pretrain_model_path w
 
 
 ```bash
-python -u scripts/train.py --conf examples/ET-MD17_FT-angle_9500.yaml  --job-id frad_aspirin --dataset-arg aspirin --pretrained-model $pretrain_model_path --dihedral-angle-noise-scale 20 --position-noise-scale 0.005 --composition true --sep-noisy-node true --train-loss-type smooth_l1_loss
+CUDA_VISIBLE_DEVICES=0 python -u scripts/train.py --conf examples/ET-MD17_FT-angle_9500.yaml  --job-id frad_aspirin --dataset-arg aspirin --pretrained-model $pretrain_model_path --dihedral-angle-noise-scale 20 --position-noise-scale 0.005 --composition true --sep-noisy-node true --train-loss-type smooth_l1_loss
 ```
 
 
 #### Finetuning the MD22
 Below is the script for fine-tuning the MD22 task. Replace pretrain_model_path with the actual model path. In this script, the subtask is set to 'AT-AT-CG-CG' by `--dataset-arg`, but it can be replaced with other subtasks such in ("AT-AT-CG-CG" "AT-AT" "Ac-Ala3-NHMe" "DHA" "buckyball-catcher" "double-walled_nanotube" "stachyose").
 ```bash
-python -u scripts/train.py --conf examples/ET-MD22.yaml --batch-size 32 --inference-batch-size 32 --num-epochs 100 --lr 1e-3 --log-dir md22-AT-AT-CG-CG --dataset-arg AT-AT-CG-CG --ngpus 1 --job-id md22-AT-AT-CG-CG --pretrained-model $$pretrain_model_path --lr-schedule cosine_warmup --save-top-k 1 --save-interval 1 --test-interval 1 --seed 666 --md17 true --train-loss-type smooth_l1_loss
+CUDA_VISIBLE_DEVICES=0 python -u scripts/train.py --conf examples/ET-MD22.yaml --batch-size 32 --inference-batch-size 32 --num-epochs 100 --lr 1e-3 --log-dir md22-AT-AT-CG-CG --dataset-arg AT-AT-CG-CG --ngpus 1 --job-id md22-AT-AT-CG-CG --pretrained-model $$pretrain_model_path --lr-schedule cosine_warmup --save-top-k 1 --save-interval 1 --test-interval 1 --seed 666 --md17 true --train-loss-type smooth_l1_loss
 ```
 
 #### Finetuning the ISO17
 Below is the script for fine-tuning the ISO17 task.
 ```bash
-python -u scripts/train.py --conf examples/ET-ISO17.yaml --batch-size 256 --job-id iso17 --inference-batch-size 256 --pretrained-model $pretrain_model_path --num-epochs 50 --lr 2e-4 --log-dir iso-energy --ngpus 1  --save-top-k 1 --save-interval 1 --test-interval 1 --seed 666 --lr-schedule cosine_warmup --md17 true --train-loss-type smooth_l1_loss
+CUDA_VISIBLE_DEVICES=0 python -u scripts/train.py --conf examples/ET-ISO17.yaml --batch-size 256 --job-id iso17 --inference-batch-size 256 --pretrained-model $pretrain_model_path --num-epochs 50 --lr 2e-4 --log-dir iso-energy --ngpus 1  --save-top-k 1 --save-interval 1 --test-interval 1 --seed 666 --lr-schedule cosine_warmup --md17 true --train-loss-type smooth_l1_loss
 ```
 
 
 #### Finetuning the LBA
 Below is the script for fine-tuning the LBA task.
 ```bash
-python -u scripts/train.py --conf examples/ET-LBA-FT_long_f2d.yaml --layernorm-on-vec whitened --job-id LBA --dataset-root $LBA_DATA_PATH --pretrained-model $pretrain_model_path
+CUDA_VISIBLE_DEVICES=0 python -u scripts/train.py --conf examples/ET-LBA-FT_long_f2d.yaml --layernorm-on-vec whitened --job-id LBA --dataset-root $LBA_DATA_PATH --pretrained-model $pretrain_model_path
 ```
 
 
@@ -132,11 +132,11 @@ python -u scripts/train.py --conf examples/ET-LBA-FT_long_f2d.yaml --layernorm-o
 Rotation Noise (Model for the QM9)
 
 ```
-python -u scripts/train.py --conf examples/ET-PCQM4MV2_dih_var0.04_var2_com_re.yaml --layernorm-on-vec whitened --job-id frad_pretraining --num-epochs 8 
+CUDA_VISIBLE_DEVICES=0 python -u scripts/train.py --conf examples/ET-PCQM4MV2_dih_var0.04_var2_com_re.yaml --layernorm-on-vec whitened --job-id frad_pretraining --num-epochs 8 
 ```
 
 Vibration and Rotation (VR) Noise (Model for Atomic Forces Tasks like md17, md22, iso17)
 
 ```
-python -u scripts/train.py --conf examples/ET-PCQM4MV2_var0.4_var2_com_re_md17.yaml --layernorm-on-vec whitened --job-id frad_pretraining_force --num-epochs 8 --bat-noise true
+CUDA_VISIBLE_DEVICES=0 python -u scripts/train.py --conf examples/ET-PCQM4MV2_var0.4_var2_com_re_md17.yaml --layernorm-on-vec whitened --job-id frad_pretraining_force --num-epochs 8 --bat-noise true
 ```
