@@ -26,6 +26,12 @@ omegaconf           2.3.0
 tqdm                4.66.2
 ```
 
+
+The basic software and environment include Python 3.8, CUDA 11.6, Ubuntu 20.04.2 with OS version 9.4.0-1ubuntu1~20.04.2, and Linux kernel version 5.4.0-177-generic.
+
+We ran all experiments on a server equipped with 8 NVIDIA A100-PCIE-40GB GPUs.
+
+
 Additionally, we have updated a Conda environment package available at [google drive](https://drive.google.com/file/d/1X9gUELR6UAifUT7VVtgur2ZWfCGl7kcF/view?usp=sharing). You can download the environment package and unzip it into the 'envs' directory of Conda.
 
 ## Quick Start
@@ -59,6 +65,8 @@ Execute the following command for property prediction. The prediction results wi
 ```
 CUDA_VISIBLE_DEVICES=0 python scripts/test.py --conf examples/ET-QM9-FT_dw_0.2_long.yaml --dataset TestData --dataset-root smiles_coord.lst --train-size 1 --val-size 1 --layernorm-on-vec whitened --job-id gap{or lumo}_inference --dataset-arg gap{or lumo} --pretrained-model $finetuned-model --output-file results.csv
 ```
+
+
 
 ## Reproduce
 
@@ -129,14 +137,18 @@ CUDA_VISIBLE_DEVICES=0 python -u scripts/train.py --conf examples/ET-LBA-FT_long
 
 ### Pretraining
 
-Rotation Noise (Model for the QM9)
+Model for the QM9
 
 ```
 CUDA_VISIBLE_DEVICES=0 python -u scripts/train.py --conf examples/ET-PCQM4MV2_dih_var0.04_var2_com_re.yaml --layernorm-on-vec whitened --job-id frad_pretraining --num-epochs 8 
 ```
-
-Vibration and Rotation (VR) Noise (Model for Atomic Forces Tasks like md17, md22, iso17)
+Model for Atomic Forces Tasks like md17, md22, iso17
 
 ```
-CUDA_VISIBLE_DEVICES=0 python -u scripts/train.py --conf examples/ET-PCQM4MV2_var0.4_var2_com_re_md17.yaml --layernorm-on-vec whitened --job-id frad_pretraining_force --num-epochs 8 --bat-noise true
+CUDA_VISIBLE_DEVICES=0 python -u scripts/train.py --conf examples/ET-PCQM4MV2_var0.4_var2_com_re_md17.yaml --layernorm-on-vec whitened --job-id frad_pretraining_force --num-epochs 8 
 ```
+
+
+- The above script is for pre-training the model using RN noise. To switch to VRN noise, add the option ```--bat-noise true```.
+
+- For the LBA task, we incorporate angular information into the molecular geometry embedding to better model the complexity of the input protein-ligand complex. Add the option ```--model equivariant-transformerf2d``` to apply the custom model for LBA.
