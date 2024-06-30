@@ -174,17 +174,26 @@ def load_model(filepath, args=None, device="cpu", mean=None, std=None, **kwargs)
     
     if "state_dict" not in ckpt: # load diffusion model
         new_state_dict = {}
+        misc_state_dict = {}
         for k, v in ckpt.items():
             # if 'pos_normalizer' not in k:
             if 'dynamics.gnn' in k:
                 k = k.replace('dynamics.gnn.', '')
                 new_state_dict[k] = v
+            else:
+                if 'dynamics.noise_out2' in k:
+                    k = k.replace('dynamics.noise_out2.', 'output_model_noise.')
+                    misc_state_dict[k] = v
+                if 'dynamics.pos_normalizer' in k:
+                    k = k.replace('dynamics.pos_normalizer.', 'pos_normalizer.')
+                    misc_state_dict[k] = v
         
         current_model_dict = model.representation_model.state_dict()
         # ommit mismatching shape
         new_state_dict2 = {}
         
         embedding_keys = []
+        not_loaded_keys = []
         for k in current_model_dict:
             if k in new_state_dict:
                 if current_model_dict[k].size() == new_state_dict[k].size():
@@ -192,8 +201,16 @@ def load_model(filepath, args=None, device="cpu", mean=None, std=None, **kwargs)
                 else:
                     print(f'warning {k} shape mismatching, not loaded')
                     new_state_dict2[k] = current_model_dict[k]
-                    new_state_dict2[k][pcq_with_h['atomic_nb']] = new_state_dict[k].T[:-1] + new_state_dict[k.split('.weight')[0] + '.bias']
+                    # new_state_dict2[k][pcq_with_h['atomic_nb']] = new_state_dict[k].T[:-1] + new_state_dict[k.split('.weight')[0] + '.bias']
+                    
+                    
+                    # new pre-trained model embedding layer: 22(h) + 1(t_int) + context(53) + 1(t_int2) = 77
+                    atom_categories = len(pcq_with_h['atomic_nb'])
+                    new_state_dict2[k][pcq_with_h['atomic_nb']] = new_state_dict[k].T[:atom_categories] + new_state_dict[k.split('.weight')[0] + '.bias']
+                    
                     embedding_keys.append(k)
+            else:
+                not_loaded_keys.append(k)
         
         # new_state_dict2 = {k:v if v.size()==current_model_dict[k].size()  else  current_model_dict[k] for k,v in zip(current_model_dict.keys(), new_state_dict.values())}
         # for k,v in zip(current_model_dict.keys(), new_state_dict.values()):
@@ -204,8 +221,11 @@ def load_model(filepath, args=None, device="cpu", mean=None, std=None, **kwargs)
         loading_return = model.representation_model.load_state_dict(new_state_dict2, strict=False)
         
         
-        # copy the embedding weight
-        
+        # copy the noise head and pos normalizer
+        loading_return2 = model.load_state_dict(misc_state_dict, strict=False)
+        all_keys = model.state_dict().keys()
+        loading_keys = set(all_keys) - set(loading_return2.missing_keys)
+        print(f'loading noise head and pos parameter, loading keys: {loading_keys}')
         
         
         
