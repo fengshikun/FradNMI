@@ -234,6 +234,32 @@ def check_for_nan(module, gin, gout):
         print("NaN values found in gradients!")
 
 class EMB(torch.nn.Module):
+    """
+    EMB is a PyTorch module that encapsulates the embedding of distance, angle, and torsion features.
+
+    Args:
+        num_spherical (int): Number of spherical harmonics.
+        num_radial (int): Number of radial basis functions.
+        cutoff (float): Cutoff distance for embeddings.
+        envelope_exponent (int): Exponent for the envelope function.
+
+    Functions:
+        reset_parameters():
+            Resets the parameters of the distance embedding to their initial values.
+
+        forward(dist, angle, torsion, idx_kj):
+            Forward pass through the embedding layers.
+
+            Args:
+                dist (torch.Tensor): Distance tensor.
+                angle (torch.Tensor): Angle tensor.
+                torsion (torch.Tensor): Torsion tensor.
+                idx_kj (torch.Tensor): Index tensor for angular and torsional embeddings.
+
+            Returns:
+                tuple: A tuple containing the distance embedding, angle embedding, and torsion embedding.
+    """
+
     def __init__(self, num_spherical, num_radial, cutoff, envelope_exponent):
         super(EMB, self).__init__()
         self.dist_emb = dist_emb(num_radial, cutoff, envelope_exponent)
