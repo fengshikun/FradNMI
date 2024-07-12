@@ -30,6 +30,18 @@ cnt = 1
 if __name__ == "__main__":
 
     def generate_rdkit_conf(mol):
+        """
+        Generate a 3D conformation for a given RDKit molecule using the RDKit library.
+
+        Args:
+            mol (rdkit.Chem.Mol): The input RDKit molecule object.
+
+        Returns:
+            rdkit.Chem.Mol: The RDKit molecule object with the generated 3D conformation.
+
+        Raises:
+            Exception: Captures and prints any exception that occurs during conformation generation or optimization.
+        """
         test_mol = copy.deepcopy(mol)
         try:
             test_mol.RemoveConformer(0)
