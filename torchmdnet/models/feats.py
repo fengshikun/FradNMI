@@ -13,10 +13,30 @@ import sympy as sym
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def Jn(r, n):
+    """
+    Compute the spherical Bessel function of the first kind.
+
+    Parameters:
+    r (float or array-like): The value(s) at which to evaluate the Bessel function.
+    n (int): The order of the Bessel function.
+
+    Returns:
+    float or ndarray: The value(s) of the spherical Bessel function of the first kind at r.
+    """
     return np.sqrt(np.pi / (2 * r)) * sp.jv(n + 0.5, r)
 
 
 def Jn_zeros(n, k):
+    """
+    Compute the first k zeros of the spherical Bessel function of the first kind for orders 0 to n-1.
+
+    Parameters:
+    n (int): The number of orders of the spherical Bessel function.
+    k (int): The number of zeros to compute for each order.
+
+    Returns:
+    numpy.ndarray: A 2D array of shape (n, k) containing the first k zeros for each order from 0 to n-1.
+    """
     zerosj = np.zeros((n, k), dtype='float32')
     zerosj[0] = np.arange(1, k + 1) * np.pi
     points = np.arange(1, k + n) * np.pi
@@ -32,6 +52,15 @@ def Jn_zeros(n, k):
 
 
 def spherical_bessel_formulas(n):
+    """
+    Generate the first n spherical Bessel functions of the first kind using symbolic differentiation.
+
+    Parameters:
+    n (int): The number of spherical Bessel functions to generate.
+
+    Returns:
+    list: A list of n symbolic expressions representing the spherical Bessel functions of the first kind.
+    """
     x = sym.symbols('x')
 
     f = [sym.sin(x) / x]
@@ -44,6 +73,16 @@ def spherical_bessel_formulas(n):
 
 
 def bessel_basis(n, k):
+    """
+    Generate a basis of normalized spherical Bessel functions.
+
+    Parameters:
+    n (int): The number of orders of the spherical Bessel functions.
+    k (int): The number of zeros to use for normalization of each order.
+
+    Returns:
+    list: A list of lists containing symbolic expressions of the normalized spherical Bessel functions for each order and zero.
+    """
     zeros = Jn_zeros(n, k)
     normalizer = []
     for order in range(n):
@@ -68,11 +107,31 @@ def bessel_basis(n, k):
 
 
 def sph_harm_prefactor(k, m):
+    """
+    Compute the prefactor for spherical harmonics.
+
+    Parameters:
+    k (int): The degree of the spherical harmonic.
+    m (int): The order of the spherical harmonic.
+
+    Returns:
+    float: The prefactor for the spherical harmonic of degree k and order m.
+    """
     return ((2 * k + 1) * np.math.factorial(k - abs(m)) /
             (4 * np.pi * np.math.factorial(k + abs(m))))**0.5
 
 
 def associated_legendre_polynomials(k, zero_m_only=True):
+    """
+    Compute associated Legendre polynomials.
+
+    Parameters:
+    k (int): The maximum degree of the associated Legendre polynomials.
+    zero_m_only (bool, optional): If True, only compute the polynomials for m=0. Defaults to True.
+
+    Returns:
+    list: A nested list containing the associated Legendre polynomials for each degree and order up to k.
+    """
     z = sym.symbols('z')
     P_l_m = [[0] * (j + 1) for j in range(k)]
 
@@ -151,6 +210,12 @@ def real_sph_harm(l, zero_m_only=False, spherical_coordinates=True):
 
 class Envelope(torch.nn.Module):
     def __init__(self, exponent):
+        """
+        Envelope function to scale inputs using a polynomial of a specified exponent.
+
+        Parameters:
+        exponent (int): The exponent for the polynomial.
+        """
         super(Envelope, self).__init__()
         self.p = exponent + 1
         self.a = -(self.p + 1) * (self.p + 2) / 2
@@ -158,6 +223,15 @@ class Envelope(torch.nn.Module):
         self.c = -self.p * (self.p + 1) / 2
 
     def forward(self, x):
+        """
+        Apply the envelope function to the input tensor.
+
+        Parameters:
+        x (torch.Tensor): Input tensor to be scaled.
+
+        Returns:
+        torch.Tensor: Scaled input tensor using the envelope function.
+        """
         p, a, b, c = self.p, self.a, self.b, self.c
         x_pow_p0 = x.pow(p - 1)
         x_pow_p1 = x_pow_p0 * x
@@ -167,6 +241,14 @@ class Envelope(torch.nn.Module):
 
 class dist_emb(torch.nn.Module):
     def __init__(self, num_radial, cutoff=5.0, envelope_exponent=5):
+        """
+        Distance embedding module with a cutoff and envelope function.
+
+        Parameters:
+        num_radial (int): Number of radial basis functions.
+        cutoff (float, optional): Cutoff distance for the embedding. Defaults to 5.0.
+        envelope_exponent (int, optional): Exponent for the envelope function. Defaults to 5.
+        """
         super(dist_emb, self).__init__()
         self.cutoff = cutoff
         self.envelope = Envelope(envelope_exponent)
@@ -179,6 +261,15 @@ class dist_emb(torch.nn.Module):
         self.freq.data = torch.arange(1, self.freq.numel() + 1).float().mul_(PI)
 
     def forward(self, dist):
+        """
+        Apply the distance embedding to the input distances.
+
+        Parameters:
+        dist (torch.Tensor): Input distance tensor.
+
+        Returns:
+        torch.Tensor: Transformed distance tensor after applying the envelope function and sinusoidal radial basis functions.
+        """
         dist = dist.unsqueeze(-1) / self.cutoff
         return self.envelope(dist) * (self.freq * dist).sin()
 
@@ -186,6 +277,31 @@ class dist_emb(torch.nn.Module):
 class angle_emb(torch.nn.Module):
     def __init__(self, num_spherical, num_radial, cutoff=5.0,
                  envelope_exponent=5):
+        
+        """
+        A module for computing angular embeddings using spherical harmonics and Bessel functions.
+
+        Args:
+            num_spherical (int): Number of spherical harmonics to consider.
+            num_radial (int): Number of radial basis functions to consider, should be <= 64.
+            cutoff (float, optional): Cutoff radius for the embeddings. Default is 5.0.
+            envelope_exponent (int, optional): Exponent for envelope function (not currently used).
+
+        Attributes:
+            num_spherical (int): Number of spherical harmonics.
+            num_radial (int): Number of radial basis functions.
+            cutoff (float): Cutoff radius for the embeddings.
+            sph_funcs (list): List of functions for spherical harmonics.
+            bessel_funcs (list): List of functions for Bessel basis functions.
+
+        Raises:
+            AssertionError: If num_radial exceeds 64.
+
+        Notes:
+            This module uses symbolic computation to generate basis functions for spherical harmonics
+            and Bessel functions and converts them into torch-compatible functions.
+
+        """
         super(angle_emb, self).__init__()
         assert num_radial <= 64
         self.num_spherical = num_spherical
@@ -212,6 +328,18 @@ class angle_emb(torch.nn.Module):
                 self.bessel_funcs.append(bessel)
 
     def forward(self, dist, angle, idx_kj):
+        """
+        Forward pass method for computing angular embeddings.
+
+        Args:
+            dist (torch.Tensor): Distance tensor normalized by the cutoff radius.
+            angle (torch.Tensor): Angle tensor.
+            idx_kj (torch.Tensor): Indices for selecting specific basis functions.
+
+        Returns:
+            torch.Tensor: Tensor containing computed angular embeddings.
+
+        """
         dist = dist / self.cutoff
         rbf = torch.stack([f(dist) for f in self.bessel_funcs], dim=1)
         # rbf = self.envelope(dist).unsqueeze(-1) * rbf
@@ -226,6 +354,31 @@ class angle_emb(torch.nn.Module):
 class torsion_emb(torch.nn.Module):
     def __init__(self, num_spherical, num_radial, cutoff=5.0,
                  envelope_exponent=5):
+        """
+        A module for computing torsional embeddings using spherical harmonics and Bessel functions.
+
+        Args:
+            num_spherical (int): Number of spherical harmonics to consider.
+            num_radial (int): Number of radial basis functions to consider, should be <= 64.
+            cutoff (float, optional): Cutoff radius for the embeddings. Default is 5.0.
+            envelope_exponent (int, optional): Exponent for envelope function (not currently used).
+
+        Attributes:
+            num_spherical (int): Number of spherical harmonics.
+            num_radial (int): Number of radial basis functions.
+            cutoff (float): Cutoff radius for the embeddings.
+            sph_funcs (list): List of functions for spherical harmonics.
+            bessel_funcs (list): List of functions for Bessel basis functions.
+
+        Raises:
+            AssertionError: If num_radial exceeds 64.
+
+        Notes:
+            This module uses symbolic computation to generate basis functions for spherical harmonics
+            and Bessel functions and converts them into torch-compatible functions. It supports
+            spherical harmonics with non-zero m values.
+
+        """
         super(torsion_emb, self).__init__()
         assert num_radial <= 64
         self.num_spherical = num_spherical #
@@ -255,6 +408,19 @@ class torsion_emb(torch.nn.Module):
                 self.bessel_funcs.append(bessel)
 
     def forward(self, dist, angle, phi, idx_kj):
+        """
+        Forward pass method for computing torsional embeddings.
+
+        Args:
+            dist (torch.Tensor): Distance tensor normalized by the cutoff radius.
+            angle (torch.Tensor): Angle tensor (theta).
+            phi (torch.Tensor): Angle tensor (phi).
+            idx_kj (torch.Tensor): Indices for selecting specific basis functions.
+
+        Returns:
+            torch.Tensor: Tensor containing computed torsional embeddings.
+
+        """
         dist = dist / self.cutoff
         rbf = torch.stack([f(dist) for f in self.bessel_funcs], dim=1)
         cbf = torch.stack([f(angle, phi) for f in self.sph_funcs], dim=1)

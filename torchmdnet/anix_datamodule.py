@@ -58,6 +58,39 @@ def ani1x_iter_data_buckets(h5filename, keys=['wb97x_dz.energy']):
 
 class ANI1X(Dataset):
     def __init__(self, data_dir, species, positions, energies, forces, smiles=None):
+        """
+        ANI1X Dataset for loading atomic data from directories.
+
+        Args:
+            data_dir (str): Directory where the dataset is stored.
+            species (list): List of atomic species for each data point.
+            positions (list): List of atomic positions for each data point.
+            energies (list): List of energy values for each data point.
+            forces (list): List of force values for each data point.
+            smiles (list, optional): List of SMILES representations for each data point. Defaults to None.
+
+        Methods:
+            __getitem__(index):
+                Retrieves the data point at the specified index.
+                
+                Args:
+                    index (int): Index of the data point to retrieve.
+                
+                Returns:
+                    Data: A Data object containing the following attributes:
+                        - z (torch.Tensor): Atomic numbers of shape [Na,], encoded as integers.
+                        - pos (torch.Tensor): Atomic positions of shape [Na, 3].
+                        - y (torch.Tensor): Energy values of shape [1,], converted to kcal/mol and adjusted for self energy.
+                        - self_energy (torch.Tensor): Self energy values of shape [1,], in kcal/mol.
+                        - dy (torch.Tensor): Force values of shape [Na, 3], converted to kcal/mol/Å.
+                        - smi (str, optional): SMILES representation, if provided.
+
+            __len__():
+                Returns the number of data points in the dataset.
+                
+                Returns:
+                    int: The number of data points.
+        """
         self.data_dir = data_dir
         self.species = species
         self.positions = positions
@@ -98,14 +131,48 @@ class ANI1X(Dataset):
 
 
 class ANI1XA(Dataset):
-    def __init__(self, data_dir, species, positions, energies, forces, smiles=None, dihedral_angle_noise_scale=0.1, position_noise_scale=0.005):
+    def __init__(self, data_dir, species, positions, energies, forces, smiles=None, position_noise_scale=0.005):
+        """
+        ANI1X Dataset for loading atomic data from directories, applying the noisy node.
+
+        Args:
+            data_dir (str): Directory where the dataset is stored.
+            species (list): List of atomic species for each data point.
+            positions (list): List of atomic positions for each data point.
+            energies (list): List of energy values for each data point.
+            forces (list): List of force values for each data point.
+            smiles (list, optional): List of SMILES representations for each data point. Defaults to None.
+
+        Methods:
+            __getitem__(index):
+                Retrieves the data point at the specified index.
+                
+                Args:
+                    index (int): Index of the data point to retrieve.
+                
+                Returns:
+                    Data: A Data object containing the following attributes:
+                        - z (torch.Tensor): Atomic numbers of shape [Na,], encoded as integers.
+                        - pos (torch.Tensor): Atomic positions of shape [Na, 3].
+                        - y (torch.Tensor): Energy values of shape [1,], converted to kcal/mol and adjusted for self energy.
+                        - self_energy (torch.Tensor): Self energy values of shape [1,], in kcal/mol.
+                        - dy (torch.Tensor): Force values of shape [Na, 3], converted to kcal/mol/Å.
+                        - smi (str, optional): SMILES representation, if provided.
+                        - position_noise_scale (float): Scale of the random noise applied to atomic positions.
+
+            __len__():
+                Returns the number of data points in the dataset.
+                
+                Returns:
+                    int: The number of data points.
+        """
         self.data_dir = data_dir
         self.species = species
         self.positions = positions
         self.energies = energies
         self.smiles = smiles
         self.forces = forces
-        self.dihedral_angle_noise_scale = dihedral_angle_noise_scale
+        # self.dihedral_angle_noise_scale = dihedral_angle_noise_scale
         self.position_noise_scale = position_noise_scale
 
     def __getitem__(self, index):
@@ -162,6 +229,69 @@ class ANI1XA(Dataset):
 
 class ANIXDataModule(LightningDataModule):
     def __init__(self, hparams, dataset=None):
+        """
+        ANIX Data Module for managing ANI-1x dataset loading and processing using PyTorch Lightning.
+
+        Args:
+            hparams (Namespace): Hyperparameters for the data module.
+            dataset (Dataset, optional): Custom dataset to use. Defaults to None.
+
+        Attributes:
+            dataset (Dataset): The dataset object.
+            args (Namespace): Hyperparameters passed to the data module.
+            mask_atom (str): Mask atom type specified in hyperparameters.
+            dir (str): Directory where the dataset is stored.
+            seed (int): Seed for random operations.
+            num_workers (int): Number of workers for data loading.
+            batch_size (int): Batch size for training.
+            inference_batch_size (int): Batch size for inference.
+            valid_size (float): Proportion of data for validation.
+            test_size (float): Proportion of data for testing.
+            _mean (torch.Tensor, optional): Mean of the dataset for standardization. Defaults to None.
+            _std (torch.Tensor, optional): Standard deviation of the dataset for standardization. Defaults to None.
+            _saved_dataloaders (dict): Dictionary to store data loaders.
+
+        Methods:
+            setup(stage):
+                Sets up the data module for training, validation, and testing.
+                
+                Args:
+                    stage (str): The stage for which to set up the data module ('fit', 'validate', 'test', or 'predict').
+
+            train_dataloader():
+                Returns the data loader for the training dataset.
+                
+                Returns:
+                    DataLoader: Data loader for the training dataset.
+
+            val_dataloader():
+                Returns the data loader for the validation dataset.
+                
+                Returns:
+                    list of DataLoader: List containing the data loader for the validation dataset,
+                    and optionally the data loader for the test dataset based on the training epoch.
+
+            test_dataloader():
+                Returns the data loader for the test dataset.
+                
+                Returns:
+                    DataLoader: Data loader for the test dataset.
+
+            mean:
+                Returns the mean of the dataset for standardization.
+                
+                Returns:
+                    torch.Tensor: Mean of the dataset.
+
+            std:
+                Returns the standard deviation of the dataset for standardization.
+                
+                Returns:
+                    torch.Tensor: Standard deviation of the dataset.
+
+            _standardize():
+                Computes and sets the mean and standard deviation of the training dataset for standardization.
+        """
         super(ANIXDataModule, self).__init__()
         self._mean, self._std = None, None
         self._saved_dataloaders = dict()
@@ -297,7 +427,7 @@ class ANIXDataModule(LightningDataModule):
                 positions=self.train_clean.positions, energies=self.train_clean.energies,
                 forces=self.train_clean.forces,
                 smiles=self.train_clean.smiles,
-                dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
+                # dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
                 position_noise_scale=self.args.position_noise_scale,
             )
             self.valid_dataset = ANI1XA(
@@ -305,7 +435,7 @@ class ANIXDataModule(LightningDataModule):
                 positions=self.valid_clean.positions, energies=self.valid_clean.energies,
                 forces=self.valid_clean.forces,
                 smiles=self.valid_clean.smiles,
-                dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
+                # dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
                 position_noise_scale=self.args.position_noise_scale,
             )
             self.test_dataset = ANI1XA(
@@ -313,7 +443,7 @@ class ANIXDataModule(LightningDataModule):
                 positions=self.test_clean.positions, energies=self.test_clean.energies, 
                 forces=self.test_clean.forces,
                 smiles=self.test_clean.smiles,
-                dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
+                # dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
                 position_noise_scale=self.args.position_noise_scale,
             )
 

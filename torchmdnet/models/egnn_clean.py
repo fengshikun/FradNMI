@@ -9,7 +9,22 @@ from torch.nn import LayerNorm
 import math
 
 class E_GCL(nn.Module):
+    """
+    Graph Convolutional Layer (GCL) module for edge-aware graph neural networks.
 
+    Args:
+        input_nf (int): Number of input node features.
+        output_nf (int): Number of output node features.
+        hidden_nf (int): Number of hidden units in the layer.
+        edges_in_d (int, optional): Dimensionality of additional edge features, default is 0.
+        act_fn (torch.nn.Module, optional): Activation function applied after linear layers, default is nn.SiLU().
+        residual (bool, optional): Whether to use residual connections, default is True.
+        attention (bool, optional): Whether to use attention mechanism, default is False.
+        normalize (bool, optional): Whether to apply layer normalization, default is False.
+        coords_agg (str, optional): Method to aggregate edge coordinates ('mean' or 'sum'), default is 'mean'.
+        tanh (bool, optional): Whether to apply Tanh activation after coordinate MLP, default is False.
+        use_layer_norm (bool, optional): Whether to use layer normalization, default is True.
+    """
     def __init__(self, input_nf, output_nf, hidden_nf, edges_in_d=0, act_fn=nn.SiLU(), residual=True, attention=False, normalize=False, coords_agg='mean', tanh=False, use_layer_norm=True):
         super(E_GCL, self).__init__()
         input_edge = input_nf * 2
@@ -52,6 +67,18 @@ class E_GCL(nn.Module):
                 nn.Sigmoid())
 
     def edge_model(self, source, target, radial, edge_attr):
+        """
+        Apply edge model to the given inputs.
+
+        Parameters:
+        source (torch.Tensor): Source node features.
+        target (torch.Tensor): Target node features.
+        radial (torch.Tensor): Radial features representing the relationship between source and target.
+        edge_attr (torch.Tensor or None): Edge attributes, if available. If None, this parameter is unused.
+
+        Returns:
+        torch.Tensor: Output tensor after applying the edge MLP and optional attention mechanism.
+        """
         if edge_attr is None:  # Unused.
             out = torch.cat([source, target, radial], dim=1)
         else:
@@ -63,6 +90,20 @@ class E_GCL(nn.Module):
         return out
 
     def node_model(self, x, edge_index, edge_attr, node_attr):
+        """
+        Apply node model to the given inputs.
+
+        Parameters:
+        x (torch.Tensor): Node features.
+        edge_index (torch.Tensor): Edge indices defining the graph connectivity.
+        edge_attr (torch.Tensor): Edge attributes.
+        node_attr (torch.Tensor or None): Node attributes, if available. If None, this parameter is unused.
+
+        Returns:
+        tuple: A tuple containing:
+            - torch.Tensor: Output tensor after applying the node MLP.
+            - torch.Tensor: Aggregated features before applying the node MLP.
+        """
         row, col = edge_index
         agg = unsorted_segment_sum(edge_attr, row, num_segments=x.size(0))
         if node_attr is not None:
@@ -73,6 +114,21 @@ class E_GCL(nn.Module):
         return out, agg
 
     def coord_model(self, coord, edge_index, coord_diff, edge_feat):
+        """
+        Apply coordinate model to the given inputs.
+
+        Parameters:
+        coord (torch.Tensor): Node coordinates.
+        edge_index (torch.Tensor): Edge indices defining the graph connectivity.
+        coord_diff (torch.Tensor): Differences in coordinates between connected nodes.
+        edge_feat (torch.Tensor): Edge features.
+
+        Returns:
+        torch.Tensor: Updated node coordinates after applying the coordinate model.
+
+        Raises:
+        Exception: If an unsupported aggregation method is specified in self.coords_agg.
+        """
         row, col = edge_index
         trans = coord_diff * self.coord_mlp(edge_feat)
         if self.coords_agg == 'sum':
@@ -85,6 +141,18 @@ class E_GCL(nn.Module):
         return coord
 
     def coord2radial(self, edge_index, coord):
+        """
+        Convert coordinates to radial features and coordinate differences.
+
+        Parameters:
+        edge_index (torch.Tensor): Edge indices defining the graph connectivity.
+        coord (torch.Tensor): Node coordinates.
+
+        Returns:
+        tuple: A tuple containing:
+            - torch.Tensor: Radial features representing squared differences in coordinates.
+            - torch.Tensor: Coordinate differences between connected nodes, optionally normalized.
+        """
         row, col = edge_index
         coord_diff = coord[row] - coord[col]
         radial = torch.sum(coord_diff**2, 1).unsqueeze(1)
@@ -98,6 +166,25 @@ class E_GCL(nn.Module):
         return radial, coord_diff
 
     def forward(self, h, edge_index, coord, edge_attr=None, node_attr=None, edge_mask=None, update_coords=True):
+        """
+        Forward pass through the model.
+
+        Parameters:
+        h (torch.Tensor): Node features.
+        edge_index (torch.Tensor): Edge indices defining the graph connectivity.
+        coord (torch.Tensor): Node coordinates.
+        edge_attr (torch.Tensor or None): Edge attributes
+        node_attr (torch.Tensor or None): Node attributes
+        edge_mask (torch.Tensor or None): Mask for edges
+        update_coords (bool): Flag to determine whether to update coordinates.
+
+        Returns:
+        tuple: A tuple containing:
+            - torch.Tensor: Updated node features.
+            - torch.Tensor: Updated node coordinates.
+            - torch.Tensor: Edge attributes.
+        """
+        
         row, col = edge_index
         radial, coord_diff = self.coord2radial(edge_index, coord)
         h0 = h
@@ -165,6 +252,21 @@ class EGNN_last(nn.Module):
 
 class EGNN_finetune_last(EGNN_last):
     def __init__(self, in_node_nf, hidden_nf, in_edge_nf=0, act_fn=nn.SiLU(), n_layers=4, residual=True, attention=False, normalize=False, tanh=False, use_layer_norm=False):
+        """
+        EGNN model for fine-tuning with additional decoding layers.
+
+        Parameters:
+        in_node_nf (int): Number of input node features.
+        hidden_nf (int): Number of hidden features.
+        in_edge_nf (int, optional): Number of input edge features. Defaults to 0.
+        act_fn (nn.Module, optional): Activation function. Defaults to nn.SiLU().
+        n_layers (int, optional): Number of layers in the model. Defaults to 4.
+        residual (bool, optional): Flag to determine whether to use residual connections. Defaults to True.
+        attention (bool, optional): Flag to determine whether to use attention mechanism. Defaults to False.
+        normalize (bool, optional): Flag to determine whether to normalize coordinates. Defaults to False.
+        tanh (bool, optional): Flag to determine whether to apply Tanh activation. Defaults to False.
+        use_layer_norm (bool, optional): Flag to determine whether to use layer normalization. Defaults to False.
+        """
         EGNN_last.__init__(self, in_node_nf, hidden_nf, in_edge_nf, act_fn, n_layers, residual, attention, normalize, tanh, use_layer_norm)
         self.node_dec = nn.Sequential(nn.Linear(self.hidden_nf, self.hidden_nf),
                                       act_fn,
@@ -189,7 +291,26 @@ class EGNN_finetune_last(EGNN_last):
         #     if 'weight' in n:
         #         nn.init.kaiming_uniform_(p, a=0) 
 
-    def forward(self, h, x, edges, edge_attr, n_nodes, edge_mask=None, node_mask=None, adapter=None, mean=None, std=None):
+    def forward(self, h, x, edges, edge_attr, n_nodes, edge_mask=None, node_mask=None, mean=None, std=None):
+        """
+        Forward pass through the fine-tuning model.
+
+        Parameters:
+        h (torch.Tensor): Node features.
+        x (torch.Tensor): Node coordinates.
+        edges (torch.Tensor): Edge indices defining the graph connectivity.
+        edge_attr (torch.Tensor): Edge attributes.
+        n_nodes (int): Number of nodes in the graph.
+        edge_mask (torch.Tensor or None): Mask for edges, if available. If None, this parameter is unused.
+        node_mask (torch.Tensor or None): Mask for nodes, if available. If None, this parameter is unused.
+        mean (torch.Tensor or None): Mean for normalization, if available. If None, this parameter is unused.
+        std (torch.Tensor or None): Standard deviation for normalization, if available. If None, this parameter is unused.
+
+        Returns:
+        tuple: A tuple containing:
+            - torch.Tensor: Predicted values after applying the graph decoder and optional normalization.
+            - torch.Tensor: Noise predictions.
+        """
         x_ = x.clone()
         h, x = EGNN_last.forward(self, h, x, edges, edge_attr, edge_mask=edge_mask)
         
@@ -216,6 +337,22 @@ class EGNN_finetune_last(EGNN_last):
 
 class EGNN_md_last(EGNN_last):
     def __init__(self, in_node_nf, hidden_nf, in_edge_nf=0, act_fn=nn.SiLU(), n_layers=4, residual=True, attention=False, normalize=False, tanh=False, mean=None, std=None):
+        """
+        EGNN model with mean and standard deviation normalization for molecular dynamics.
+
+        Parameters:
+        in_node_nf (int): Number of input node features.
+        hidden_nf (int): Number of hidden features.
+        in_edge_nf (int, optional): Number of input edge features. Defaults to 0.
+        act_fn (nn.Module, optional): Activation function. Defaults to nn.SiLU().
+        n_layers (int, optional): Number of layers in the model. Defaults to 4.
+        residual (bool, optional): Flag to determine whether to use residual connections. Defaults to True.
+        attention (bool, optional): Flag to determine whether to use attention mechanism. Defaults to False.
+        normalize (bool, optional): Flag to determine whether to normalize coordinates. Defaults to False.
+        tanh (bool, optional): Flag to determine whether to apply Tanh activation. Defaults to False.
+        mean (float or None, optional): Mean value for normalization. Defaults to None.
+        std (float or None, optional): Standard deviation value for normalization. Defaults to None.
+        """
         EGNN_last.__init__(self, in_node_nf, hidden_nf, in_edge_nf, act_fn, n_layers, residual, attention, normalize, tanh)
 
         self.node_dec = nn.Sequential(nn.Linear(self.hidden_nf, self.hidden_nf),
@@ -241,6 +378,23 @@ class EGNN_md_last(EGNN_last):
          
 
     def forward(self, h, x, edges, edge_attr, batch, edge_mask=None, md_type='predict'):
+        """
+        Forward pass through the molecular dynamics model.
+
+        Parameters:
+        h (torch.Tensor): Node features.
+        x (torch.Tensor): Node coordinates.
+        edges (torch.Tensor): Edge indices defining the graph connectivity.
+        edge_attr (torch.Tensor): Edge attributes.
+        batch (torch.Tensor): Batch indices for the graph.
+        edge_mask (torch.Tensor or None): Mask for edges, if available. If None, this parameter is unused.
+        md_type (str, optional): Type of molecular dynamics computation. Defaults to 'predict'. Can be 'predict' or 'gradient'.
+
+        Returns:
+        tuple: A tuple containing:
+            - torch.Tensor: Predicted values after applying the graph decoder and normalization.
+            - torch.Tensor or None: Coordinate's gradients, based on md_type.
+        """
         x_ = x.clone()
         if md_type == 'gradient':
             x_.requires_grad_(True)
@@ -266,6 +420,17 @@ class EGNN_md_last(EGNN_last):
 
 
 def unsorted_segment_sum(data, segment_ids, num_segments):
+    """
+    Compute unsorted segment sum.
+
+    Parameters:
+    data (torch.Tensor): Data tensor to be segmented.
+    segment_ids (torch.Tensor): Tensor containing indices of segments for each element.
+    num_segments (int): Number of segments.
+
+    Returns:
+    torch.Tensor: Resulting tensor after performing unsorted segment sum operation.
+    """
     result_shape = (num_segments, data.size(1))
     result = data.new_full(result_shape, 0)  # Init empty result tensor.
     segment_ids = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
@@ -274,6 +439,17 @@ def unsorted_segment_sum(data, segment_ids, num_segments):
 
 
 def unsorted_segment_mean(data, segment_ids, num_segments):
+    """
+    Compute unsorted segment mean.
+
+    Parameters:
+    data (torch.Tensor): Data tensor to be segmented.
+    segment_ids (torch.Tensor): Tensor containing indices of segments for each element.
+    num_segments (int): Number of segments.
+
+    Returns:
+    torch.Tensor: Resulting tensor after performing unsorted segment mean operation.
+    """
     result_shape = (num_segments, data.size(1))
     segment_ids = segment_ids.unsqueeze(-1).expand(-1, data.size(1))
     result = data.new_full(result_shape, 0)  # Init empty result tensor.
@@ -284,6 +460,17 @@ def unsorted_segment_mean(data, segment_ids, num_segments):
 
 
 def get_edges(n_nodes):
+    """
+    Generate all possible edges between nodes in a graph with n_nodes.
+
+    Parameters:
+    n_nodes (int): Number of nodes in the graph.
+
+    Returns:
+    list: A list containing:
+        - list: Rows of edge indices.
+        - list: Columns of edge indices.
+    """
     rows, cols = [], []
     for i in range(n_nodes):
         for j in range(n_nodes):
@@ -296,6 +483,18 @@ def get_edges(n_nodes):
 
 
 def get_edges_batch(n_nodes, batch_size):
+    """
+    Generate edges and edge attributes for a batch of graphs.
+
+    Parameters:
+    n_nodes (int): Number of nodes in each graph.
+    batch_size (int): Number of graphs in the batch.
+
+    Returns:
+    tuple: A tuple containing:
+        - list: Edge indices as a list of tensors for the batch.
+        - torch.Tensor: Edge attributes for the batch.
+    """
     edges = get_edges(n_nodes)
     edge_attr = torch.ones(len(edges[0]) * batch_size, 1)
     edges = [torch.LongTensor(edges[0]), torch.LongTensor(edges[1])]

@@ -23,6 +23,18 @@ import torch.nn.functional as F
 class EdgeFeatureInit(nn.Module):
     r"""init the edge feature of torchmd net"""
     def __init__(self, distance_exp, activation, num_radial, hidden_channels) -> None:
+        """
+        Initialize the edge features for a TorchMD_ETF2D.
+
+        Parameters:
+        - distance_exp (float): Exponent for distance computation.
+        - activation (nn.Module): Activation function for the layer.
+        - num_radial (int): Number of radial channels.
+        - hidden_channels (int): Number of hidden channels.
+
+        Returns:
+        - None
+        """
         super().__init__()
         self.distance_exp = distance_exp
         self.act = activation()
@@ -39,6 +51,17 @@ class EdgeFeatureInit(nn.Module):
 
     # TODO add 2D edge information
     def forward(self, node_embs, edge_index, edge_weight):
+        """
+        Forward pass method for EdgeFeatureInit module.
+
+        Parameters:
+        - node_embs (torch.Tensor): Node embeddings tensor.
+        - edge_index (torch.Tensor): Tensor representing edge indices.
+        - edge_weight (torch.Tensor): Tensor representing edge weights.
+
+        Returns:
+        - Tuple[torch.Tensor, torch.Tensor]: Tuple of tensors e1 and e2.
+        """
         rbf = self.distance_exp(edge_weight)
         rbf0 = self.act(self.lin_rbf_0(rbf))
         e1 = self.act(self.lin(torch.cat([node_embs[edge_index[0]], node_embs[edge_index[1]], rbf0], dim=-1)))
@@ -48,6 +71,16 @@ class EdgeFeatureInit(nn.Module):
 
 class ResidualLayer(torch.nn.Module):
     def __init__(self, hidden_channels, act):
+        """
+        Residual layer module with two linear transformations and activation function.
+
+        Parameters:
+        - hidden_channels (int): Number of hidden channels.
+        - act (torch.nn.Module): Activation function.
+
+        Returns:
+        - torch.Tensor: Output tensor after residual connection and transformations.
+        """
         super(ResidualLayer, self).__init__()
         self.act = act()
         self.lin1 = Linear(hidden_channels, hidden_channels)
@@ -69,6 +102,24 @@ class ResidualLayer(torch.nn.Module):
 class UpdateE(torch.nn.Module):
     def __init__(self, hidden_channels, int_emb_size, basis_emb_size_dist, basis_emb_size_angle, basis_emb_size_torsion, num_spherical, num_radial,
         num_before_skip, num_after_skip, act):
+        """
+        Update module for edge features.
+
+        Parameters:
+        - hidden_channels (int): Number of hidden channels.
+        - int_emb_size (int): Size of intermediate embeddings.
+        - basis_emb_size_dist (int): Size of distance basis embeddings.
+        - basis_emb_size_angle (int): Size of angle basis embeddings.
+        - basis_emb_size_torsion (int): Size of torsion basis embeddings.
+        - num_spherical (int): Number of spherical channels.
+        - num_radial (int): Number of radial channels.
+        - num_before_skip (int): Number of residual layers before skip connection.
+        - num_after_skip (int): Number of residual layers after skip connection.
+        - act (torch.nn.Module): Activation function.
+
+        Returns:
+        - None
+        """
         super(UpdateE, self).__init__()
         self.act = act()
         self.lin_rbf1 = nn.Linear(num_radial, basis_emb_size_dist, bias=False)
@@ -126,6 +177,18 @@ class UpdateE(torch.nn.Module):
         glorot_orthogonal(self.lin_rbf.weight, scale=2.0)
 
     def forward(self, x, emb, idx_kj, idx_ji):
+        """
+        Forward pass method for UpdateE module.
+
+        Parameters:
+        - x (Tuple[torch.Tensor, torch.Tensor]): Tuple of tensors x0 and some other tensor.
+        - emb (Tuple[torch.Tensor, torch.Tensor, torch.Tensor]): Tuple of tensors rbf0, sbf, and t.
+        - idx_kj (torch.Tensor): Tensor representing indices for x_kj.
+        - idx_ji (torch.Tensor): Tensor representing indices for x_ji.
+
+        Returns:
+        - Tuple[torch.Tensor, torch.Tensor]: Tuple of tensors e1 and e2.
+        """
         rbf0, sbf, t = emb
         x1,_ = x
 
@@ -192,7 +255,7 @@ class EMB(torch.nn.Module):
 
 # fuse 2D infomation inside
 class TorchMD_ETF2D(nn.Module):
-    r"""The TorchMD equivariant Transformer architecture.
+    r"""The Special TorchMD equivariant Transformer architecture For LBA task.
 
     Args:
         hidden_channels (int, optional): Hidden embedding size.
@@ -228,6 +291,18 @@ class TorchMD_ETF2D(nn.Module):
             higher values if they are using higher upper distance cutoffs and expect more
             than 32 neighbors per node/atom.
             (default: :obj:`32`)
+        layernorm_on_vec (str or None, optional): Layer normalization type. (default: None)
+        md17 (bool, optional): Whether using on MD17 Tasks, will disable some layernorm layers. (default: False)
+        seperate_noise (bool, optional): Separate noise handling. (default: False)
+        num_spherical (int, optional): Number of spherical channels. (default: 3)
+        num_radial (int, optional): Number of radial channels. (default: 6)
+        envelope_exponent (int, optional): Exponent for envelope function. (default: 5)
+        int_emb_size (int, optional): Size of intermediate embeddings. (default: 64)
+        basis_emb_size_dist (int, optional): Size of distance basis embeddings. (default: 8)
+        basis_emb_size_angle (int, optional): Size of angle basis embeddings. (default: 8)
+        basis_emb_size_torsion (int, optional): Size of torsion basis embeddings. (default: 8)
+        num_before_skip (int, optional): Number of layers before skip connection. (default: 1)
+        num_after_skip (int, optional): Number of layers after skip connection. (default: 2)
     """
 
     def __init__(
@@ -380,6 +455,21 @@ class TorchMD_ETF2D(nn.Module):
 
 
     def forward(self, z, pos, batch, return_e=False, type_idx=None):
+        """
+        Forward pass method for the TorchMD_ETF2D module.
+
+        Parameters:
+        - z (torch.Tensor): Atomic numbers tensor.
+        - pos (torch.Tensor): Positions tensor.
+        - batch (torch.Tensor): Batch tensor.
+        - return_e (bool, optional): Flag to return edge features. (default: False)
+        - type_idx (torch.Tensor, optional): Type indices tensor.
+
+        Returns:
+        - Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        Updated node features, vector features, atomic numbers, positions, and batch indices.
+        If return_e is True, also returns edge features and edge indices.
+        """
         x = self.embedding(z)
         if type_idx is not None:
             type_embedding = self.type_embedding(type_idx)

@@ -46,7 +46,7 @@ num_rbf: 64
 num_workers: 6
 output_model: Scalar
 precision: 32
-prior_model: Atomref
+prior_model: Atomref  
 rbf_type: expnorm
 redirect: false
 reduce_op: add

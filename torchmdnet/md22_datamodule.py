@@ -28,6 +28,39 @@ ATOM_DICT = {1: 'H', 6: 'C', 7: 'N', 8: 'O'}
 
 class MD22(Dataset):
     def __init__(self, data_dir, species, positions, energies, forces, smiles=None):
+        """
+        MD22 Dataset for molecular data.
+
+        Args:
+            data_dir (str): Directory containing the dataset.
+            species (list of list of str): Atomic species for each molecule.
+            positions (list of list of list of float): Atomic positions for each molecule.
+            energies (list of float): Energies for each molecule.
+            forces (list of list of list of float): Forces on each atom in each molecule.
+            smiles (list of str, optional): SMILES strings for each molecule. Defaults to None.
+
+        Methods:
+            __getitem__(index):
+                Get the data for a single molecule.
+                
+                Args:
+                    index (int): Index of the molecule to retrieve.
+                
+                Returns:
+                    Data: A Data object containing the following:
+                        - z (torch.Tensor): Tensor of atomic numbers.
+                        - pos (torch.Tensor): Tensor of atomic positions.
+                        - y (torch.Tensor): Tensor of energy.
+                        - dy (torch.Tensor): Tensor of forces.
+                        - smi (str, optional): SMILES string, if available.
+            
+            __len__():
+                Get the number of molecules in the dataset.
+                
+                Returns:
+                    int: Number of molecules.
+        """
+
         self.data_dir = data_dir
         self.species = species
         self.positions = positions
@@ -61,14 +94,49 @@ class MD22(Dataset):
 
 
 class MD22A(Dataset):
-    def __init__(self, data_dir, species, positions, energies, forces, smiles=None, dihedral_angle_noise_scale=0.1, position_noise_scale=0.005):
+    def __init__(self, data_dir, species, positions, energies, forces, smiles=None, position_noise_scale=0.005):
+        """
+        MD22 Dataset for molecular data, applying the noisy node.
+
+        Args:
+            data_dir (str): Directory containing the dataset.
+            species (list of list of str): Atomic species for each molecule.
+            positions (list of list of list of float): Atomic positions for each molecule.
+            energies (list of float): Energies for each molecule.
+            forces (list of list of list of float): Forces on each atom in each molecule.
+            smiles (list of str, optional): SMILES strings for each molecule. Defaults to None.
+            position_noise_scale: The scale of the random noise added to the atomic positions.
+
+        Methods:
+            __getitem__(index):
+                Get the data for a single molecule.
+                
+                Args:
+                    index (int): Index of the molecule to retrieve.
+                
+                Returns:
+                    Data: A Data object containing the following:
+                        - z (torch.Tensor): Tensor of atomic numbers.
+                        - pos (torch.Tensor): Tensor of atomic positions.
+                        - y (torch.Tensor): Tensor of energy.
+                        - dy (torch.Tensor): Tensor of forces.
+                        - smi (str, optional): SMILES string, if available.
+            
+            __len__():
+                Get the number of molecules in the dataset.
+                
+                Returns:
+                    int: Number of molecules.
+        """
+        
+        
         self.data_dir = data_dir
         self.species = species
         self.positions = positions
         self.energies = energies
         self.forces = forces
         self.smiles = smiles
-        self.dihedral_angle_noise_scale = dihedral_angle_noise_scale
+        # self.dihedral_angle_noise_scale = dihedral_angle_noise_scale
         self.position_noise_scale = position_noise_scale
 
     def __getitem__(self, index):
@@ -117,6 +185,63 @@ class MD22A(Dataset):
 
 class MD22DataModule(LightningDataModule):
     def __init__(self, hparams, dataset=None):
+        """
+        MD22DataModule for managing data loading and preprocessing of the MD22 dataset.
+
+        Args:
+            hparams (Namespace): Hyperparameters for the data module.
+            dataset (Dataset, optional): Dataset object. Defaults to None.
+
+        Methods:
+            _read_xyz(xyz_path):
+                Reads an XYZ file and extracts species, coordinates, energies, and forces.
+                
+                Args:
+                    xyz_path (str): Path to the XYZ file.
+                
+                Returns:
+                    tuple: Contains lists of species, coordinates, energies, and forces.
+            
+            setup(stage):
+                Sets up the dataset by preprocessing and splitting into train, validation, and test sets.
+                
+                Args:
+                    stage (str): Stage of the setup process ('fit', 'validate', 'test', 'predict').
+            
+            train_dataloader():
+                Returns the data loader for the training dataset.
+                
+                Returns:
+                    DataLoader: DataLoader object for training data.
+            
+            val_dataloader():
+                Returns the data loader for the validation dataset.
+                
+                Returns:
+                    DataLoader: DataLoader object for validation data.
+            
+            test_dataloader():
+                Returns the data loader for the test dataset.
+                
+                Returns:
+                    DataLoader: DataLoader object for test data.
+
+            mean:
+                Property that returns the mean of the dataset.
+                
+                Returns:
+                    torch.Tensor: Mean of the dataset.
+            
+            std:
+                Property that returns the standard deviation of the dataset.
+                
+                Returns:
+                    torch.Tensor: Standard deviation of the dataset.
+            
+            _standardize():
+                Computes the mean and standard deviation of the dataset and stores them.
+        """
+
         super(MD22DataModule, self).__init__()
         self._mean, self._std = None, None
         self._saved_dataloaders = dict()
@@ -268,21 +393,21 @@ class MD22DataModule(LightningDataModule):
                 self.train_clean.data_dir, species=self.train_clean.species,
                 positions=self.train_clean.positions, energies=self.train_clean.energies,
                 forces=self.train_clean.forces, smiles=self.train_clean.smiles,
-                dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
+                # dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
                 position_noise_scale=self.args.position_noise_scale,
             )
             self.valid_dataset = MD22A(
                 self.valid_clean.data_dir, species=self.valid_clean.species,
                 positions=self.valid_clean.positions, energies=self.valid_clean.energies,
                 forces=self.valid_clean.forces, smiles=self.valid_clean.smiles,
-                dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
+                # dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
                 position_noise_scale=self.args.position_noise_scale,
             )
             self.test_dataset = MD22A(
                 self.test_clean.data_dir, species=self.test_clean.species, 
                 positions=self.test_clean.positions, energies=self.test_clean.energies, 
                 forces=self.test_clean.forces, smiles=self.test_clean.smiles,
-                dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
+                # dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
                 position_noise_scale=self.args.position_noise_scale,
             )
 

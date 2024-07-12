@@ -33,12 +33,33 @@ class anidataloader(object):
 
     ''' Contructor '''
     def __init__(self, store_file):
+        '''
+        Initializes the AniDataLoader class by loading an HDF5 file.
+
+        Args:
+            store_file (str): Path to the HDF5 file to be loaded.
+
+        Raises:
+            SystemExit: If the specified `store_file` does not exist.
+
+        '''
         if not os.path.exists(store_file):
             exit('Error: file not found - '+store_file)
         self.store = h5py.File(store_file)
 
     ''' Group recursive iterator (iterate through all groups in all branches and return datasets in dicts) '''
     def h5py_dataset_iterator(self,g, prefix=''):
+        '''
+        Recursive iterator over HDF5 groups and datasets, yielding dataset information.
+
+        Args:
+            g (h5py.Group): HDF5 group to iterate over.
+            prefix (str, optional): Prefix to prepend to dataset paths. Default is ''.
+
+        Yields:
+            dict: Dictionary containing dataset path and data.
+
+        '''
         for key in g.keys():
             item = g[key]
             path = '{}/{}'.format(prefix, key)
@@ -110,6 +131,24 @@ class anidataloader(object):
 
 class ANI1(Dataset):
     def __init__(self, data_dir, species, positions, energies, smiles=None):
+        '''
+        ANI1 dataset class for molecular energies.
+
+        Args:
+            data_dir (str): Directory containing dataset.
+            species (list): List of atomic species for each molecule.
+            positions (list): List of atomic positions for each molecule.
+            energies (list): List of energies for each molecule.
+            smiles (list, optional): List of SMILES representations for each molecule. Default is None.
+
+        Methods:
+            __getitem__(self, index):
+                Retrieves a single item (molecule) from the dataset at the specified index.
+
+            __len__(self):
+                Returns the total number of molecules in the dataset.
+
+        '''
         self.data_dir = data_dir
         self.species = species
         self.positions = positions
@@ -146,13 +185,32 @@ class ANI1(Dataset):
 
 
 class ANI1A(Dataset):
-    def __init__(self, data_dir, species, positions, energies, smiles=None, dihedral_angle_noise_scale=0.1, position_noise_scale=0.005):
+    def __init__(self, data_dir, species, positions, energies, smiles=None, position_noise_scale=0.005):
+        '''
+        ANI1 dataset class for molecular energies, applying the noise node.
+
+        Args:
+            data_dir (str): Directory containing dataset.
+            species (list): List of atomic species for each molecule.
+            positions (list): List of atomic positions for each molecule.
+            energies (list): List of energies for each molecule.
+            smiles (list, optional): List of SMILES representations for each molecule. Default is None.
+            position_noise_scale: the noise scale of noisy node, applying to the coordinate of molecule
+
+        Methods:
+            __getitem__(self, index):
+                Retrieves a single item (molecule) from the dataset at the specified index.
+
+            __len__(self):
+                Returns the total number of molecules in the dataset.
+
+        '''
         self.data_dir = data_dir
         self.species = species
         self.positions = positions
         self.energies = energies
         self.smiles = smiles
-        self.dihedral_angle_noise_scale = dihedral_angle_noise_scale
+        # self.dihedral_angle_noise_scale = dihedral_angle_noise_scale
         self.position_noise_scale = position_noise_scale
 
     def __getitem__(self, index):
@@ -206,6 +264,43 @@ class ANI1A(Dataset):
 
 class ANIDataModule(LightningDataModule):
     def __init__(self, hparams, dataset=None):
+        """
+        LightningDataModule for preparing and loading ANI1 dataset.
+
+        Args:
+            hparams (argparse.Namespace): Hyperparameters including dataset configuration.
+            dataset (Optional[torch.utils.data.Dataset]): Optional dataset instance.
+
+        Returns:
+            None
+
+        Functions:
+            __init__(self, hparams, dataset=None):
+                Initializes the ANIDataModule with hyperparameters and optional dataset.
+            
+            setup(self, stage):
+                Prepares ANI1 dataset for training, validation, and testing stages.
+            
+            train_dataloader(self):
+                Returns the PyGDataLoader for training dataset.
+            
+            val_dataloader(self):
+                Returns list of PyGDataLoaders for validation and optionally test datasets.
+            
+            test_dataloader(self):
+                Returns the PyGDataLoader for test dataset.
+            
+            @property
+            mean(self):
+                Returns the mean tensor of the dataset.
+            
+            @property
+            std(self):
+                Returns the standard deviation tensor of the dataset.
+            
+            _standardize(self):
+                Computes and sets the mean and standard deviation of the dataset.
+        """
         super(ANIDataModule, self).__init__()
         self._mean, self._std = None, None
         self._saved_dataloaders = dict()
@@ -331,21 +426,21 @@ class ANIDataModule(LightningDataModule):
                 self.train_clean.data_dir, species=self.train_clean.species,
                 positions=self.train_clean.positions, energies=self.train_clean.energies,
                 smiles=self.train_clean.smiles,
-                dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
+                # dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
                 position_noise_scale=self.args.position_noise_scale,
             )
             self.valid_dataset = ANI1A(
                 self.valid_clean.data_dir, species=self.valid_clean.species,
                 positions=self.valid_clean.positions, energies=self.valid_clean.energies,
                 smiles=self.valid_clean.smiles,
-                dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
+                # dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
                 position_noise_scale=self.args.position_noise_scale,
             )
             self.test_dataset = ANI1A(
                 self.test_clean.data_dir, species=self.test_clean.species, 
                 positions=self.test_clean.positions, energies=self.test_clean.energies, 
                 smiles=self.test_clean.smiles,
-                dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
+                # dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
                 position_noise_scale=self.args.position_noise_scale,
             )
 

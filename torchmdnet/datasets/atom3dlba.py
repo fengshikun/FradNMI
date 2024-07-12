@@ -12,11 +12,36 @@ from pathlib import Path
 import lmdb
 import random
 import dgl
-from .pair_lba import deserialize_array
 import os
 
+def deserialize_array(serialized):
+    """
+    Deserialize a byte serialized array into a NumPy array of float32 values.
+
+    Parameters:
+    - serialized (bytes): Serialized byte array to be deserialized.
+
+    Returns:
+    - numpy.ndarray: Deserialized array of float32 values.
+    """
+    return np.frombuffer(serialized, dtype=np.float32)
 
 def coord2graph(coord:torch.tensor,cutoff=6,daul_graph=True) -> dgl.graph:
+    """
+    Convert coordinates into a graph representation using DGL.
+
+    Parameters:
+    coord (torch.Tensor): Tensor of shape (N, D) where N is the number of nodes and D is the dimension of coordinates.
+    cutoff (float, optional): Maximum distance between nodes to form edges. Default is 6.
+    dual_graph (bool, optional): Whether to compute the dual graph representation. Default is True.
+
+    Returns:
+    g (dgl.graph): Main graph constructed based on input coordinates and cutoff distance.
+    dg (dgl.graph or None): Dual graph representation if dual_graph is True, otherwise None.
+    edge_dist (torch.Tensor): Tensor containing distances of edges in the main graph.
+    dedge_cos (torch.Tensor or None): Tensor containing cosine similarities of edges in the dual graph if dual_graph is True, otherwise None.
+    """
+    
     vector = coord[None,:,:] - coord[:,None,:]
     distance = torch.linalg.norm(vector,dim=-1,keepdim=True)
     vector = vector / distance
@@ -108,6 +133,18 @@ class LMDBDataset(Dataset):
         return list(self._id_to_idx.keys())
 
     def __getitem__(self, index: int):
+        """
+        Retrieve an item from the dataset at the specified index.
+
+        Parameters:
+        index (int): Index of the item to retrieve.
+
+        Returns:
+        item: The item retrieved from the dataset. Returns None if deserialization fails.
+        
+        Raises:
+        IndexError: If the index is out of range [0, num_examples).
+        """
         if not 0 <= index < self._num_examples:
             raise IndexError(index)
 
@@ -153,7 +190,26 @@ atomic_number = {'H': 1, 'He': 2, 'Li': 3, 'Be': 4, 'B': 5, 'C': 6, 'N': 7, 'O':
 
 class LBADataset(InMemoryDataset):
     def __init__(self, data_path, transform_noise=None, lp_sep=False, feat_path='/data/protein/SKData/LBADATA/', use_lig_feat=False):
-        
+        """
+        Dataset class for handling LBA data stored in a dictionary format and optionally using ligand features from LMDB.
+
+        Args:
+        data_path (str): Path to the numpy data file containing a dictionary with 'index' key.
+        transform_noise (callable, optional): Optional transform to apply to data items.
+        lp_sep (bool, optional): Flag indicating whether to separate ligand and protein features. Default is False.
+        feat_path (str, optional): Path to the directory containing ligand feature data. Default is '/data/protein/SKData/LBADATA/'.
+        use_lig_feat (bool, optional): Flag indicating whether to use ligand features from LMDB. Default is False.
+
+        Attributes:
+        transform_noise (callable or None): Transform function to apply to data items.
+        data_dict (dict): Dictionary loaded from data_path, expected to contain 'index' key.
+        length (int): Number of examples in the dataset.
+        lp_sep (bool): Flag indicating whether to separate ligand and protein features.
+        pocket_atom_offset (int): Offset for distinguishing pocket atoms in the dataset.
+        use_lig_feat (bool): Flag indicating whether to use ligand features from LMDB.
+        env (lmdb.Environment or None): LMDB environment if use_lig_feat is True, otherwise None.
+        _keys (list or None): List of keys from the LMDB environment if use_lig_feat is True, otherwise None.
+        """
         self.transform_noise = transform_noise
         self.data_dict = np.load(data_path, allow_pickle=True).item() # dict
         self.length = len(self.data_dict['index'])
@@ -170,7 +226,23 @@ class LBADataset(InMemoryDataset):
     def __len__(self) -> int:
         return self.length
     
-    def __getitem__(self, idx):
+    def __getitem__(self, idx):        
+        """
+        Retrieves a single item (data sample) from the dataset at the specified index.
+
+        Args:
+            idx (int): Index of the data sample to retrieve.
+
+        Returns:
+            Data: An instance of the Data class containing the following attributes:
+                - z (torch.Tensor): Tensor of atomic charges for each atom in the sample.
+                - pos (torch.Tensor): Tensor of atomic positions for each atom in the sample.
+                - y (torch.Tensor): Tensor of negative log affinity values for the sample.
+                - org_pos (torch.Tensor): Tensor of original atomic positions for debug purposes.
+                - pocket_atomsnum (int): Number of atoms in the pocket region of the sample.
+                - lig_feat (torch.Tensor, optional): If `use_lig_feat` is True, tensor of ligand features.
+                - type_mask (torch.Tensor): Binary mask indicating pocket atoms (0) and ligand atoms (1).
+        """
 
         data = Data()
         # get z, pos, and y
@@ -207,152 +279,3 @@ class LBADataset(InMemoryDataset):
         
         # data.ligand_atomsnum = ligand_atomsnum
         return data
-
-class LBADataset3(InMemoryDataset):
-
-    def __init__(self,
-                 data,
-                 max_len=256,
-                 seed=42,
-                 daul_graph=True,
-                 rm_H = True) -> None:
-        super().__init__()
-        random.seed(seed)
-        self.data = LMDBDataset(data)
-        self.seed = seed
-        self.max_len = max_len
-        #self.atom_type = ["C","N","O","S","H","Cl","F","Br","I","Si","P","B","Na","K","Al","Ca","Sn","As","Hg","Fe","Zn","Cr","Se","Gd","Au","Li"]
-        self.atom_type = ["C","N","O","S","H","CL","F","BR","I","SI","P","B","NA","K","AL","CA","SN","AS","HG","FE","ZN","CR","SE","GD","AU","LI","MG",'NI','MN','CO','CU','SR','CS','CD']
-        self.daul_graph = daul_graph
-        self.rm_H = rm_H
-    def __getitem__(self, index):
-        datay = Data()
-        data = self.data[index]
-        pocket_atomtype = data['atoms_pocket']['element'].tolist()
-        pocket_atomtype = torch.tensor([self.atom_type.index(i) for i in pocket_atomtype]).long()
-
-        ligand_atomtype = data['atoms_ligand']['element'].tolist()
-        ligand_atomtype = torch.tensor([self.atom_type.index(i) for i in ligand_atomtype]).long()
-
-        pocket_coord = data['atoms_pocket'][['x','y','z']].to_numpy()
-        pocket_coord = torch.tensor(pocket_coord).float()
-        ligand_coord = data['atoms_ligand'][['x','y','z']].to_numpy()
-        ligand_coord = torch.tensor(ligand_coord).float()     
- 
-        if self.rm_H:
-            pocket_coord = pocket_coord[pocket_atomtype!=4]
-            ligand_coord = ligand_coord[ligand_atomtype!=4]
-            pocket_atomtype = pocket_atomtype[pocket_atomtype!=4]
-            ligand_atomtype = ligand_atomtype[ligand_atomtype!=4]
-
-        poc_lig_id = torch.cat([torch.zeros_like(pocket_atomtype),torch.ones_like(ligand_atomtype)])
-        atomtype = torch.cat([pocket_atomtype, ligand_atomtype])
-        coord = torch.cat([pocket_coord, ligand_coord])
-        
-        datay.z = atomtype
-        # data.z[:pocket_atomsnum] += self.pocket_atom_offset
-        datay.pos = coord
-        datay.type_mask = poc_lig_id
-    
-        
-        affinity = torch.tensor([data['scores']['neglog_aff']])
-        datay.y = affinity
-
-        return datay
-        # g,dg,edge_dist,dedge_cos = coord2graph(coord,daul_graph = self.daul_graph)     
-        
-        # return g,dg,poc_lig_id,atomtype,edge_dist,dedge_cos,affinity
-
-    def __len__(self):
-        return len(self.data)
-
-
-class LBADataset2(InMemoryDataset):
-
-    def __init__(self,
-                 data,
-                 max_len=256,
-                 seed=42,
-                 daul_graph=False,
-                 Hbond=False,
-                 ) -> None:
-        super().__init__()
-        random.seed(seed)
-        with open(data,'rb') as f:
-            self.data = pk.load(f)
-        self.seed = seed
-        self.Hbond = Hbond
-        self.max_len = max_len
-        #self.atom_type = ["C","N","O","S","H","Cl","F","Br","I","Si","P","B","Na","K","Al","Ca","Sn","As","Hg","Fe","Zn","Cr","Se","Gd","Au","Li"]
-        # self.atom_type = ["A","C","HD","N","NA","OA","SA",'H','O','S',"P","HS",'NS','OS','F','Cl',"Br",'I']
-        # self.atom_type = ["C","C","H","N","NA","OA","SA",'H','O','S',"P","HS",'NS','OS','F','Cl',"Br",'I']
-        self.atom_type = ['C', 'O', 'S', 'N', 'H', 'I', 'Br', 'Cl', 'F', 'P']
-        self.atom_degerate = {
-            'A':'C',
-            'C':'C',
-            'HD':'H',
-            'N':'N',
-            'NA':'N',
-            'OA':'O',
-            'SA':'S',
-            'H':'H',
-            'O':'O',
-            'S':'S',
-            'P':'P',
-            'HS':'H',
-            'NS':'N',
-            'OS':'O',
-            'F':'F',
-            'Cl':'Cl',
-            'Br':'Br',
-            'I':'I'
-        }
-        self.daul_graph = daul_graph
-
-    def __getitem__(self, index):
-        datay = Data()
-        data = self.data[index]
-        pocket_atomtype = data['pocket_atoms'].tolist()
-        if not self.Hbond:
-            pocket_atomtype = [self.atom_degerate[i] for i in pocket_atomtype]
-        pocket_atomtype = torch.tensor([self.atom_type.index(i) for i in pocket_atomtype]).long()
-
-        ligand_atomtype = data['atoms'].tolist()
-        if not self.Hbond:
-            ligand_atomtype = [self.atom_degerate[i] for i in ligand_atomtype]
-        ligand_atomtype = torch.tensor([self.atom_type.index(i) for i in ligand_atomtype]).long()
-
-        pocket_coord = data['pocket_coordinates']
-        pocket_coord = torch.tensor(pocket_coord).squeeze_().float()
-        ligand_coord = data['coordinates']
-        ligand_coord = torch.tensor(ligand_coord).squeeze_().float()     
-
-        pocket_charge = data['pocket_charges']
-        pocket_charge = torch.tensor(pocket_charge).float()
-        ligand_charge = data['charge']
-        ligand_charge = torch.tensor(ligand_charge).float()
-
-        if not self.Hbond:
-            pocket_coord = pocket_coord[pocket_atomtype!=4]
-            ligand_coord = ligand_coord[ligand_atomtype!=4]
-            pocket_atomtype = pocket_atomtype[pocket_atomtype!=4]
-            ligand_atomtype = ligand_atomtype[ligand_atomtype!=4]
-
-
-        poc_lig_id = torch.cat([torch.zeros_like(pocket_atomtype),torch.ones_like(ligand_atomtype)])
-        atomtype = torch.cat([pocket_atomtype,ligand_atomtype])
-        coord = torch.cat([pocket_coord,ligand_coord])  
-        charge = torch.cat([pocket_charge,ligand_charge])
-        g,dg,edge_dist,dedge_cos = coord2graph(coord,daul_graph = self.daul_graph)     
-        affinity = torch.tensor([data['affinity']])
-
-        datay.z = atomtype
-        # data.z[:pocket_atomsnum] += self.pocket_atom_offset
-        datay.pos = coord
-        datay.type_mask = poc_lig_id
-        datay.y = affinity
-
-        return datay
-
-    def __len__(self):
-        return len(self.data)

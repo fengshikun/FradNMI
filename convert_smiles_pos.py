@@ -3,6 +3,24 @@ from rdkit.Chem import AllChem
 import numpy as np
 
 def inner_smi2coords(smi, seed=42, mode='fast', remove_hs=False):
+    """
+    Generate atomic coordinates from a SMILES string representation of a molecule.
+
+    Args:
+        smi (str): SMILES representation of the molecule.
+        seed (int, optional): Random seed for conformer generation. Default is 42.
+        mode (str, optional): Mode for conformer generation ('fast' or 'heavy'). Default is 'fast'.
+        remove_hs (bool, optional): Whether to remove hydrogen atoms from results. Default is False.
+
+    Returns:
+        tuple: If remove_hs=True, returns a tuple containing lists of atomic numbers and corresponding coordinates (numpy array). 
+            If remove_hs=False, returns a tuple containing lists of atomic numbers and corresponding coordinates (numpy array) including hydrogen atoms.
+            
+    Raises:
+        AssertionError: If the number of atoms and coordinates do not match.
+        AssertionError: If attempting to remove hydrogen atoms but the resulting lists of atoms and coordinates do not match.
+
+    """
     mol = Chem.MolFromSmiles(smi)
     mol = AllChem.AddHs(mol)
     # get Atom number by GetAtomicNumber

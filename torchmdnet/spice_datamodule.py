@@ -43,6 +43,28 @@ ATOM_DICT = {1: 'H', 6: 'C', 7: 'N', 8: 'O'}
 
 class SPICE(Dataset):
     def __init__(self, data_dir, species, positions, energies, forces, smiles=None):
+        """
+        SPICE dataset class for molecular data.
+
+        Args:
+            data_dir (str): Directory path to the dataset.
+            species (list): List of atomic species data for each sample.
+            positions (list): List of atomic positions for each sample.
+            energies (list): List of energy values for each sample.
+            forces (list): List of force values for each sample.
+            smiles (list, optional): List of SMILES representations for each sample. Default is None.
+
+        Returns:
+            __getitem__:
+                torch_geometric.data.Data: A single data sample containing:
+                    - z (torch.Tensor): Atomic species as long tensor.
+                    - pos (torch.Tensor): Atomic positions as float tensor.
+                    - y (torch.Tensor): Energy values as float tensor, reshaped to (1, -1).
+                    - dy (torch.Tensor): Force values as float tensor.
+                    - smi (str, optional): SMILES representation, included if self.smiles is not None.
+            __len__:
+                int: Total number of samples in the dataset.
+        """
         self.data_dir = data_dir
         self.species = species
         self.positions = [p * posScale for p in positions]
@@ -73,14 +95,51 @@ class SPICE(Dataset):
 
 
 class SPICEA(Dataset):
-    def __init__(self, data_dir, species, positions, energies, forces, smiles=None, dihedral_angle_noise_scale=0.1, position_noise_scale=0.005):
+    def __init__(self, data_dir, species, positions, energies, forces, smiles=None, position_noise_scale=0.005):
+        """
+        Class `SPICEA` inherits from `Dataset` and represents a dataset for SPICEA, applying Noise node.
+        Args:
+            data_dir (str): Directory path to the dataset.
+            species (list): List of atomic species.
+            positions (list): List of atomic positions.
+            energies (list): List of energies associated with each configuration.
+            forces (list): List of forces acting on each atom in each configuration.
+            smiles (list or None, optional): List of SMILES strings for each configuration (default: None).
+            position_noise_scale (float, optional): Noisy scale for position noise (default: 0.005).
+
+        Methods:
+            __getitem__(index):
+                Retrieves and preprocesses data at a specified index.
+                
+                Args:
+                    index (int): Index of the data point to retrieve.
+                
+                Returns:
+                    org_data (Data): Processed data point with atomic species, positions, energies, forces,
+                                    and optionally SMILES information.
+            
+            transform_noise(data):
+                Applies random noise transformation to input data.
+                
+                Args:
+                    data (numpy.ndarray or torch.Tensor): Input data to add noise to.
+                
+                Returns:
+                    data_noise (torch.Tensor): Noisy version of the input data.
+            
+            __len__():
+                Returns the number of data points in the dataset.
+                
+                Returns:
+                    int: Number of data points in the dataset.
+        
+        """
         self.data_dir = data_dir
         self.species = species
         self.positions = [p * posScale for p in positions]
         self.energies = [e * energyScale for e in energies]
         self.forces = [f * forceScale for f in forces]
         self.smiles = smiles
-        self.dihedral_angle_noise_scale = dihedral_angle_noise_scale
         self.position_noise_scale = position_noise_scale
 
     def __getitem__(self, index):
@@ -126,6 +185,55 @@ class SPICEA(Dataset):
 
 class SPICEDataModule(LightningDataModule):
     def __init__(self, hparams, dataset=None):
+        """
+        SPICEDataModule is a PyTorch Lightning DataModule for handling datasets
+        related to SPICE (Solvation Parameters Interface Calculation Environment).
+        It preprocesses the data into train, validation, and test sets, optionally
+        applying standardization. It provides DataLoader instances for training,
+        validation, and testing phases.
+
+        Args:
+            hparams (argparse.Namespace): Hyperparameters and configuration options.
+                Contains attributes:
+                    - mask_atom (bool): Whether to mask atoms.
+                    - dataset_root (str): Root directory of the dataset.
+                    - seed (int): Random seed for reproducibility.
+                    - num_workers (int): Number of workers for data loading.
+                    - batch_size (int): Batch size for training.
+                    - inference_batch_size (int): Batch size for inference.
+                    - val_size (float): Fraction of data to use for validation.
+                    - test_size (float): Fraction of data to use for testing.
+
+        Returns:
+            None
+
+        Methods:
+            setup(stage):
+                Preprocesses the dataset into train, validation, and test sets,
+                saving preprocessed data locally if not already processed.
+
+            train_dataloader():
+                Returns a PyTorch DataLoader for the training set.
+
+            val_dataloader():
+                Returns a list of PyTorch DataLoader instances for validation sets.
+                Includes test DataLoader based on epoch and test_interval.
+
+            test_dataloader():
+                Returns a PyTorch DataLoader for the test set.
+
+            mean:
+                Property returning the mean computed during standardization.
+
+            std:
+                Property returning the standard deviation computed during standardization.
+
+            _standardize():
+                Computes and sets the mean and standard deviation of the dataset,
+                used for standardizing the dataset during training.
+
+        """
+
         super(SPICEDataModule, self).__init__()
         self._mean, self._std = None, None
         self._saved_dataloaders = dict()
@@ -260,7 +368,7 @@ class SPICEDataModule(LightningDataModule):
                 positions=self.train_clean.positions, energies=self.train_clean.energies,
                 forces=self.train_clean.forces,
                 smiles=self.train_clean.smiles,
-                dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
+                # dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
                 position_noise_scale=self.args.position_noise_scale,
             )
             self.valid_dataset = SPICEA(
@@ -268,7 +376,7 @@ class SPICEDataModule(LightningDataModule):
                 positions=self.valid_clean.positions, energies=self.valid_clean.energies,
                 forces=self.valid_clean.forces,
                 smiles=self.valid_clean.smiles,
-                dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
+                # dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
                 position_noise_scale=self.args.position_noise_scale,
             )
             self.test_dataset = SPICEA(
@@ -276,7 +384,7 @@ class SPICEDataModule(LightningDataModule):
                 positions=self.test_clean.positions, energies=self.test_clean.energies, 
                 forces=self.test_clean.forces,
                 smiles=self.test_clean.smiles,
-                dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
+                # dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
                 position_noise_scale=self.args.position_noise_scale,
             )
 

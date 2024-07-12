@@ -16,6 +16,18 @@ class Dense(nn.Linear):
         weight_init: Callable = xavier_uniform_,
         bias_init: Callable = zeros_,
     ):
+        """
+        A custom dense (fully connected) layer with optional activation and initialization.
+
+        Args:
+            in_features (int): Size of each input sample.
+            out_features (int): Size of each output sample.
+            bias (bool, optional): If set to False, the layer will not learn an additive bias. Defaults to True.
+            activation (Union[Callable, nn.Module], optional): Activation function to apply after the linear transformation. Defaults to None, which uses nn.Identity().
+            weight_init (Callable, optional): Initialization function for the weights. Defaults to xavier_uniform_.
+            bias_init (Callable, optional): Initialization function for the bias. Defaults to zeros_.
+        """
+        
         self.weight_init = weight_init
         self.bias_init = bias_init
         super(Dense, self).__init__(in_features, out_features, bias)
@@ -42,6 +54,19 @@ def build_mlp(
     n_layers: int = 2,
     activation: Callable = F.silu,
 ) -> nn.Module:
+    """
+    Build a Multi-Layer Perceptron (MLP) neural network.
+
+    Args:
+        n_in (int): Number of input features.
+        n_out (int): Number of output features.
+        n_hidden (Optional[Union[int, Sequence[int]]], optional): Number of neurons in the hidden layers. If None, it will automatically create a decreasing number of neurons for each layer. Defaults to None.
+        n_layers (int, optional): Number of layers in the network. Defaults to 2.
+        activation (Callable, optional): Activation function to apply to each hidden layer. Defaults to F.silu.
+
+    Returns:
+        nn.Module: A neural network model consisting of the specified number of layers and neurons, with the specified activation function applied to each hidden layer.
+    """
     # get list of number of nodes in input, hidden & output layers
     if n_hidden is None:
         c_neurons = n_in
@@ -97,6 +122,17 @@ def replicate_module(
 
 
 def gaussian_rbf(inputs: torch.Tensor, offsets: torch.Tensor, widths: torch.Tensor):
+    """
+    Computes the Gaussian Radial Basis Function (RBF) for the given inputs, offsets, and widths.
+
+    Args:
+        inputs (torch.Tensor): The input tensor.
+        offsets (torch.Tensor): The offsets for the RBF centers.
+        widths (torch.Tensor): The widths (standard deviations) for the RBFs.
+
+    Returns:
+        torch.Tensor: The resulting tensor after applying the Gaussian RBF.
+    """
     coeff = -0.5 / torch.pow(widths, 2)
     diff = inputs[..., None] - offsets
     y = torch.exp(coeff * torch.pow(diff, 2))

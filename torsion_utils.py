@@ -10,6 +10,20 @@ import torch
 from rdkit.Geometry import Point3D
 
 def get_torsions(mol_list):
+    """
+    Extracts the torsion angles (dihedrals) from a list of molecules.
+
+    This function identifies all the torsion angles in the given list of molecules and returns a list of these torsions.
+    A torsion angle is defined by four atoms and is calculated based on the connectivity of these atoms in the molecule.
+
+    Args:
+        mol_list (list): A list of RDKit molecule objects.
+
+    Returns:
+        list: A list of tuples, where each tuple contains four integers representing the indices of the atoms
+              that define a torsion angle in the molecule.
+
+    """
     atom_counter = 0
     torsionList = []
     dihedralList = []
@@ -54,13 +68,50 @@ def get_torsions(mol_list):
     return torsionList
 
 def SetDihedral(conf, atom_idx, new_vale):
+    """
+    Sets the value of a dihedral angle (torsion) in a molecule's conformation.
+
+    This function modifies the dihedral angle defined by four atoms in the given molecule conformation to the specified value.
+
+    Args:
+        conf (RDKit Conformer): The conformation of the molecule.
+        atom_idx (tuple): A tuple of four integers representing the indices of the atoms that define the dihedral angle.
+        new_vale (float): The new value of the dihedral angle in degrees.
+
+    """
     rdMolTransforms.SetDihedralDeg(conf, atom_idx[0], atom_idx[1], atom_idx[2], atom_idx[3], new_vale)
 
 
 def GetDihedral(conf, atom_idx):
+    """
+    Retrieves the value of a dihedral angle (torsion) in a molecule's conformation.
+
+    This function returns the current value of the dihedral angle defined by four atoms in the given molecule conformation.
+
+    Args:
+        conf (RDKit Conformer): The conformation of the molecule.
+        atom_idx (tuple): A tuple of four integers representing the indices of the atoms that define the dihedral angle.
+
+    Returns:
+        float: The value of the dihedral angle in degrees.
+
+    """
     return rdMolTransforms.GetDihedralDeg(conf, atom_idx[0], atom_idx[1], atom_idx[2], atom_idx[3])
 
 def apply_changes(mol, values, rotable_bonds):
+    """
+    Applies specified dihedral angle changes to a molecule based on the provided values for the dihedral angles.
+
+    Args:
+        mol (RDKit Mol): The original molecule to which the changes will be applied.
+        values (list of float): A list of new values for the dihedral angles in degrees.
+        rotable_bonds (list of tuple): A list of tuples, where each tuple contains four integers representing 
+                                       the indices of the atoms that define a rotatable bond.
+
+    Returns:
+        RDKit Mol: A new molecule with the specified dihedral angle changes applied.
+
+    """
     opt_mol = copy.deepcopy(mol)
     #     opt_mol = add_rdkit_conformer(opt_mol)
 
@@ -75,24 +126,94 @@ def apply_changes(mol, values, rotable_bonds):
 
 
 def GetBondLength(conf, atom_idx):
+    """
+    Retrieves the bond length between two atoms in a molecule's conformation.
+
+    Args:
+        conf (RDKit Conformer): The conformation of the molecule.
+        atom_idx (tuple): A tuple of two integers representing the indices of the atoms that define the bond.
+
+    Returns:
+        float: The bond length in angstroms.
+
+    """
     return rdMolTransforms.GetBondLength(conf, atom_idx[0], atom_idx[1])
 
 def SetBondLength(conf, atom_idx, new_vale):
+    """
+    Sets the bond length between two atoms in a molecule's conformation.
+
+    Args:
+        conf (RDKit Conformer): The conformation of the molecule.
+        atom_idx (tuple): A tuple of two integers representing the indices of the atoms that define the bond.
+        new_vale (float): The new bond length in angstroms.
+
+    Returns:
+        None
+
+    """
     return rdMolTransforms.SetBondLength(conf, atom_idx[0], atom_idx[1], new_vale)
 
 def GetAngle(conf, atom_idx):
+    """
+    Retrieves the bond angle defined by three atoms in a molecule's conformation.
+
+    Args:
+        conf (RDKit Conformer): The conformation of the molecule.
+        atom_idx (tuple): A tuple of three integers representing the indices of the atoms that define the angle.
+
+    Returns:
+        float: The bond angle in degrees.
+
+    """
     return rdMolTransforms.GetAngleDeg(conf, atom_idx[0], atom_idx[1], atom_idx[2])
 
 def SetAngle(conf, atom_idx, new_vale):
+    """
+    Sets the bond angle defined by three atoms in a molecule's conformation.
+
+    Args:
+        conf (RDKit Conformer): The conformation of the molecule.
+        atom_idx (tuple): A tuple of three integers representing the indices of the atoms that define the angle.
+        new_vale (float): The new bond angle in degrees.
+
+    Returns:
+        None
+
+    """
     return rdMolTransforms.SetAngleDeg(conf, atom_idx[0], atom_idx[1], atom_idx[2], new_vale)
 
 
 def apply_changes_bond_length(mol, values, bond_idx):
+    """
+    Applies specified bond length changes for the given bonds to a molecule.
+
+    Args:
+        mol (RDKit Mol): The original molecule to which the changes will be applied.
+        values (list of float): A list of new bond lengths in angstroms.
+        bond_idx (list of tuple): A list of tuples, where each tuple contains two integers representing the indices of the atoms that define a bond.
+
+    Returns:
+        RDKit Mol: A new molecule with the specified bond length changes applied.
+
+    """
     opt_mol = copy.deepcopy(mol)
     [SetBondLength(opt_mol.GetConformer(), bond_idx[r], values[r]) for r in range(len(bond_idx))]
     return opt_mol
 
 def apply_changes_angle(mol, values, bond_idx):
+    """
+    Applies specified bond angle changes for the given angles to a molecule.
+
+    Args:
+        mol (RDKit Mol): The original molecule to which the changes will be applied.
+        values (list of float): A list of new bond angles in degrees.
+        bond_idx (list of tuple): A list of tuples, where each tuple contains three integers representing the indices of the atoms that define an angle.
+
+    Returns:
+        RDKit Mol: A new molecule with the specified bond angle changes applied.
+
+    """
     opt_mol = copy.deepcopy(mol)
     [SetAngle(opt_mol.GetConformer(), bond_idx[r], values[r]) for r in range(len(bond_idx))]
 
@@ -101,6 +222,22 @@ def apply_changes_angle(mol, values, bond_idx):
 # input: mol (rdkit) object; rotate_bonds list
 # return: rotate_bonds order(list, each rotate bond maybe reverse), and depth
 def get_rotate_order_info(mol, rotate_bonds):
+    """
+    Determines the order of rotatable bonds and their depths in a molecule.
+
+    This function analyzes the molecule to identify the order in which to apply rotations to the rotatable bonds and
+    calculates the depth of each bond for hierarchical rotation.
+
+    Args:
+        mol (RDKit Mol): The molecule to analyze.
+        rotate_bonds (list of tuple): A list of tuples, where each tuple contains the indices of atoms defining a rotatable bond.
+
+    Returns:
+        tuple: A tuple containing two lists:
+               - The first list contains the ordered rotatable bonds, each as a list of atom indices.
+               - The second list contains the depths (levels) of each rotatable bond.
+
+    """
     cut_bonds_set = []
     for rb in rotate_bonds:
         cut_bonds_set.append([rb[1], rb[2]])
@@ -201,6 +338,19 @@ def get_rotate_order_info(mol, rotate_bonds):
 # method to get all bond, angle and dihedral angle vec points
 
 def get_2d_gem(mol):
+    """
+    Extracts bond, angle, and dihedral indices from a molecule.
+
+    Args:
+        mol (RDKit Mol): The molecule from which to extract the indices.
+
+    Returns:
+        tuple: A tuple containing three lists:
+               - edge_idx (list of list of int): Each sublist contains two integers representing the indices of atoms that form a bond.
+               - angle_idx (list of list of int): Each sublist contains three integers representing the indices of atoms that form an angle.
+               - dihedral_idx (list of list of int): Each sublist contains four integers representing the indices of atoms that form a dihedral.
+
+    """
     # bond  (i, j)
     edge_idx = []
     edge_feat = []
@@ -267,6 +417,22 @@ def get_2d_gem(mol):
 
 
 def get_info_by_gem_idx(org_mol, edge_idx, angle_idx, dihedral_idx):
+    """
+    Extracts bond lengths, angles, and dihedrals from a molecule based on provided indices.
+
+    Args:
+        org_mol (RDKit Mol): The molecule from which to extract the geometric information.
+        edge_idx (list of list of int): Each sublist contains two integers representing the indices of atoms that form a bond.
+        angle_idx (list of list of int): Each sublist contains three integers representing the indices of atoms that form an angle.
+        dihedral_idx (list of list of int): Each sublist contains four integers representing the indices of atoms that form a dihedral.
+
+    Returns:
+        tuple: A tuple containing three numpy arrays:
+               - The first array contains the bond lengths.
+               - The second array contains the bond angles.
+               - The third array contains the dihedral angles.
+
+    """
     bond_len_lst = []
     conf = org_mol.GetConformer()
     for b_idx in edge_idx:
@@ -288,6 +454,23 @@ def get_info_by_gem_idx(org_mol, edge_idx, angle_idx, dihedral_idx):
 
 
 def get_info_by_gem_idx2(org_mol, edge_idx, angle_idx, dihedral_idx):
+    """
+    This function calculates the bond lengths, angles, and dihedral angles for the given indices in the specified molecule.
+    It uses a different function for calculating angles compared to `get_info_by_gem_idx`.
+
+    Args:
+        org_mol (RDKit Mol): The molecule from which to extract the geometric information.
+        edge_idx (list of list of int): Each sublist contains two integers representing the indices of atoms that form a bond.
+        angle_idx (list of list of int): Each sublist contains three integers representing the indices of atoms that form an angle.
+        dihedral_idx (list of list of int): Each sublist contains four integers representing the indices of atoms that form a dihedral.
+
+    Returns:
+        tuple: A tuple containing three numpy arrays:
+               - The first array contains the bond lengths.
+               - The second array contains the bond angles.
+               - The third array contains the dihedral angles.
+
+    """
     bond_len_lst = []
     conf = org_mol.GetConformer()
     for b_idx in edge_idx:
@@ -307,16 +490,49 @@ def get_info_by_gem_idx2(org_mol, edge_idx, angle_idx, dihedral_idx):
 
 
 def filter_nan(idx_array, noise_array):
+    """
+    Filters out NaN values from the provided arrays.
+
+    """
     valid_idx = ~np.isnan(noise_array)
     return idx_array[valid_idx], noise_array[valid_idx]
 
 def check_in_samering(idx_i, idx_j, ring_array):
+    """
+    Checks if two atom indices are in the same ring.
+
+    Args:
+        idx_i (int): The first atom index.
+        idx_j (int): The second atom index.
+        ring_array (list of list of int): A list of rings, each represented as a list of atom indices.
+
+    Returns:
+        bool: True if both indices are found in the same ring, False otherwise.
+
+    """
     for ring in ring_array:
         if idx_i in ring and idx_j in ring:
             return True
     return False
 
 def concat_idx_label(edge_idx, angle_idx, dihedral_idx, noise_bond_len_label, noise_angle_label, noise_dihedral_label):
+    """
+    Concatenates indices with their corresponding noise labels, filtering out NaN values.
+
+    Args:
+        edge_idx (list of list of int): List of bond indices.
+        angle_idx (list of list of int): List of angle indices.
+        dihedral_idx (list of list of int): List of dihedral indices.
+        noise_bond_len_label (numpy array): Noise labels for bond lengths.
+        noise_angle_label (numpy array): Noise labels for angles.
+        noise_dihedral_label (numpy array): Noise labels for dihedrals.
+
+    Returns:
+        tuple: A tuple containing three numpy arrays:
+               - The first array contains the concatenated bond indices and noise labels.
+               - The second array contains the concatenated angle indices and noise labels.
+               - The third array contains the concatenated dihedral indices and noise labels.
+    """
     edge_idx = np.array(edge_idx)
     angle_idx = np.array(angle_idx)
     dihedral_idx = np.array(dihedral_idx)
@@ -349,6 +565,16 @@ def concat_idx_label(edge_idx, angle_idx, dihedral_idx, noise_bond_len_label, no
 
 
 def wiki_dihedral_torch(pos, atomidx):
+    """
+    Computes the dihedral angle using a formula from a historical version of the Wikipedia article on "Dihedral angle".
+
+    Args:
+        pos (torch.Tensor): Tensor of positions of atoms.
+        atomidx (torch.Tensor): Tensor of atom indices defining the dihedrals.
+
+    Returns:
+        torch.Tensor: Dihedral angles in degrees.
+    """
 # def wiki_dihedral_torch(p0, p1, p2, p3):
     """formula from Wikipedia article on "Dihedral angle"; formula was removed
     from the most recent version of article (no idea why, the article is a
@@ -382,6 +608,16 @@ def wiki_dihedral_torch(pos, atomidx):
 
 
 def getAngle_torch(pos, idx):
+    """
+    Calculates angles of the specific index.
+
+    Args:
+        pos (torch.Tensor): Tensor of positions of atoms.
+        idx (torch.Tensor): Tensor of atom indices defining the angles.
+
+    Returns:
+        torch.Tensor: Angles in degrees.
+    """
     # Calculate angles. 0 to pi
     # idx: i, j, k
     pos_ji = pos[idx[:, 0]] - pos[idx[:, 1]]
@@ -392,6 +628,16 @@ def getAngle_torch(pos, idx):
     return torch.rad2deg(angle)
 
 def getAngle_new(conf, atomidx):
+    """
+    Calculates the angle between three atoms of the specific index.
+
+    Args:
+        conf (RDKit Conformer): The conformer containing atom positions.
+        atomidx (list of int): List of three atom indices defining the angle.
+
+    Returns:
+        float: The angle in degrees.
+    """
     i, j, k  = np.array(conf.GetAtomPosition(atomidx[0])), np.array(conf.GetAtomPosition(atomidx[1])), np.array(conf.GetAtomPosition(atomidx[2]))
     pos_ji = i - j 
     pos_jk = k - j
@@ -431,6 +677,22 @@ def angle_between(v1, v2):
     return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
 
 def getTorsionNew(conf, atomidx):
+    """
+    Calculates the torsion angle between four atoms.
+
+    Args:
+        conf (RDKit Conformer): The conformer containing atom positions.
+        atomidx (list of int): List of four atom indices defining the torsion.
+
+    Returns:
+        float: The torsion angle in degrees.
+
+    The torsion angle is calculated by forming two planes:
+    - Plane1: Defined by the first three atoms (i, j, k)
+    - Plane2: Defined by the last three atoms (j, k, l)
+
+    The angle between these two planes is computed using the arctangent of the ratio of the sine and cosine components, derived from the cross products of the vectors forming the planes.
+    """
     # Calculate torsions.
     # i, j, k, l
     idx_i, idx_j, idx_k, idx_l = np.array(conf.GetAtomPosition(atomidx[0])), np.array(conf.GetAtomPosition(atomidx[1])), np.array(conf.GetAtomPosition(atomidx[2])), np.array(conf.GetAtomPosition(atomidx[3]))
@@ -745,6 +1007,25 @@ def add_equi_keep_noise2(opt_mol, bond_var=0.04, angle_var=0.09, torsion_var=0.6
 
 
 def add_equi_keep_noise(opt_mol, bond_var=0.04, angle_var=0.09, torsion_var=0.69, coord_var=0.04, add_ring_noise=False):
+    """
+    Adds noise to the molecular conformation including bond lengths, bond angles, bond torsions and isotropic coordinate noise on rings.
+
+    Args:
+        opt_mol (RDKit Mol): The optimized molecule to which noise will be added.
+        bond_var (float, optional): Standard deviation for bond length noise. Default is 0.04.
+        angle_var (float, optional): Standard deviation for angle noise. Default is 0.09.
+        torsion_var (float, optional): Standard deviation for torsion angle noise. Default is 0.69.
+        coord_var (float, optional): Standard deviation for coordinate noise. Default is 0.04.
+        add_ring_noise (bool, optional): Whether to add noise to atoms in rings. Default is False.
+
+    Returns:
+        tuple: A tuple containing:
+            - RDKit Mol: The molecule with added noise.
+            - numpy.ndarray: Array of bond labels with noise.
+            - numpy.ndarray: Array of angle labels with noise.
+            - list: List of rotatable dihedral labels with noise.
+            - list: List of rotatable dihedral labels for rotation with noise.
+    """
     mol = copy.deepcopy(opt_mol)
     conf = mol.GetConformer()
     edge_idx, angle_idx, dihedral_idx = get_2d_gem(mol)
@@ -984,6 +1265,26 @@ def add_equi_keep_noise(opt_mol, bond_var=0.04, angle_var=0.09, torsion_var=0.69
 
 
 def add_equi_noise(opt_mol, bond_var=0.04, angle_var=0.04, torsion_var=2, coord_var=0.04, add_ring_noise=False):
+    """
+    Adds noise to the molecular conformation, including bond lengths, angles, and optionally torsion angles and atom positions.
+
+    Args:
+        opt_mol (RDKit Mol): The optimized molecule to which noise will be added.
+        bond_var (float, optional): Standard deviation for bond length noise. Default is 0.04.
+        angle_var (float, optional): Standard deviation for angle noise. Default is 0.04.
+        torsion_var (float, optional): Standard deviation for torsion angle noise. Default is 2.
+        coord_var (float, optional): Standard deviation for coordinate noise. Default is 0.04.
+        add_ring_noise (bool, optional): Whether to add noise to atoms in rings. Default is False.
+
+    Returns:
+        tuple: A tuple containing:
+            - RDKit Mol: The molecule with added noise.
+            - numpy.ndarray: Array of bond labels with noise.
+            - numpy.ndarray: Array of angle labels with noise.
+            - list: List of dihedral labels with noise.
+            - list: List of dihedral labels for rotation with noise.
+
+    """
     # bond noise, find all bond add noise
     org_conf = opt_mol.GetConformer()
     mol = copy.deepcopy(opt_mol)
@@ -1156,6 +1457,34 @@ def transform_noise(data, position_noise_scale=0.04):
     return data_noise
 
 def add_equi_noise_new(opt_mol, bond_var=0.058, angle_var=0.129, torsion_var_r=1, torsion_var=0.18, coord_var=0.04, add_ring_noise=False, add_noise_type=0, mol_param=None, ky=0):
+    """
+    Add noise to a molecule's equilibrium conformation.
+
+    Args:
+        opt_mol (RDKit Mol): The optimized molecule to which noise will be added.
+        bond_var (float, optional): Standard deviation for bond length noise. Default is 0.058.
+        angle_var (float, optional): Standard deviation for angle noise. Default is 0.129.
+        torsion_var_r (float, optional): Standard deviation for rotatable torsion angle noise. Default is 1.
+        torsion_var (float, optional): Standard deviation for torsion angle noise. Default is 0.18.
+        coord_var (float, optional): Standard deviation for coordinate noise. Default is 0.04.
+        add_ring_noise (bool, optional): Whether to add noise to atoms in rings. Default is False.
+        add_noise_type (int, optional): Type of noise to add:
+            - 0: No additional noise (default).
+            - 1: Frad noise.
+            - 2: Gaussian noise.
+        mol_param (dict, optional): Parameters defining molecular properties.
+        ky (int, optional): Key identifier for molecular parameters.
+
+    Returns:
+        tuple: A tuple containing:
+            - RDKit Mol: The molecule with added noise.
+            - numpy.ndarray: Array of bond labels with noise.
+            - numpy.ndarray: Array of angle labels with noise.
+            - numpy.ndarray: Array of dihedral labels with noise.
+            - list: List of rotate dihedral labels with noise.
+            - list: List of specific variable labels.
+    """
+   
     # bond noise, find all bond add noise
     
     org_conf = opt_mol.GetConformer()

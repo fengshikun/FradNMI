@@ -12,13 +12,36 @@ from torch import Tensor
 # code from equibind:
 
 def isRingAromatic(mol, bondRing):
+    """
+    Check if all bonds in a ring are aromatic.
+
+    Args:
+        mol (rdkit.Chem.Mol): The molecule to analyze.
+        bondRing (list): List of bond indices representing the ring.
+
+    Returns:
+        bool: True if all bonds in the specified ring are aromatic, False otherwise.
+    """
     for id in bondRing:
         if not mol.GetBondWithIdx(id).GetIsAromatic():
             return False
     return True
 
 def get_geometry_graph_ring(lig, only_atom_ring=False):
-    # coords = lig.GetConformer().GetPositions()
+    """
+    Constructs a geometry graph for a molecular ligand.
+
+    Args:
+        lig (Chem.Mol): The molecular ligand object.
+        only_atom_ring (bool, optional): If True, include only atoms in rings as destinations. Defaults to False.
+
+    Returns:
+        tuple: A tuple containing:
+            - edges_src (list): List of source indices for edges.
+            - edges_dst (list): List of destination indices for edges.
+            - feat (torch.Tensor): Tensor of edge features representing bond lengths.
+    """
+
     rings = lig.GetRingInfo().AtomRings()
     bond_rings = lig.GetRingInfo().BondRings()
     edges_src = []
@@ -55,6 +78,24 @@ def get_geometry_graph_ring(lig, only_atom_ring=False):
 
 
 def train_val_test_split(dset_len, train_size, val_size, test_size, seed, order=None):
+    """
+    Split a dataset into training, validation, and test sets.
+
+    Args:
+        dset_len (int): Total number of samples in the dataset.
+        train_size (float or int): Size of the training set. If float, interpreted as a proportion.
+        val_size (float or int): Size of the validation set. If float, interpreted as a proportion.
+        test_size (float or int): Size of the test set. If float, interpreted as a proportion.
+        seed (int): Seed for random number generation.
+        order (list or None): Optional list specifying the order of indices to use.
+
+    Returns:
+        tuple: A tuple containing:
+            - np.array: Indices for the training set.
+            - np.array: Indices for the validation set.
+            - np.array: Indices for the test set.
+    """
+
     assert (train_size is None) + (val_size is None) + (
         test_size is None
     ) <= 1, "Only one of train_size, val_size, test_size is allowed to be None."
@@ -122,6 +163,30 @@ def make_splits(
     splits=None,
     order=None,
 ):
+    """
+    Generate train, validation, and test splits for a dataset.
+
+    Args:
+        dataset_len (int): Total number of samples in the dataset.
+        train_size (float): Proportion of the dataset to include in the training set.
+        val_size (float): Proportion of the dataset to include in the validation set.
+        test_size (float): Proportion of the dataset to include in the test set.
+        seed (int): Random seed for reproducibility.
+        filename (str, optional): If specified, save the splits to a NPZ file with this name.
+        splits (str, optional): Path to a NPZ file containing pre-defined splits.
+        order (str, optional): Optional ordering of the dataset if splits are not provided.
+
+    Returns:
+        tuple: A tuple containing torch tensors of the indices for train, validation, and test sets.
+            - torch.Tensor: Indices for the training set.
+            - torch.Tensor: Indices for the validation set.
+            - torch.Tensor: Indices for the test set.
+
+    Notes:
+        - If `splits` is provided, it loads the splits from the NPZ file.
+        - If `filename` is specified, it saves the generated splits to the specified NPZ file.
+    """
+
     if splits is not None:
         splits = np.load(splits)
         idx_train = splits["idx_train"]
@@ -143,6 +208,27 @@ def make_splits(
 
 
 class LoadFromFile(argparse.Action):
+    """
+    Custom argparse action to load configuration from a YAML file.
+
+    Usage:
+        parser.add_argument('--file', type=open, action=LoadFromFile)
+
+    This action reads a YAML configuration file and updates the argparse namespace
+    with the contents of the file. It verifies that all keys in the YAML file are valid
+    arguments for the parser, raising an error if an unknown key is encountered.
+
+    Raises:
+        ValueError: If the configuration file does not end with '.yaml' or '.yml',
+                    or if there are unknown arguments in the configuration file.
+
+    Attributes:
+        parser: The ArgumentParser object.
+        namespace: The namespace containing parsed arguments.
+        values: The values from the command line.
+        option_string: The option string used to invoke this action.
+
+    """
     # parser.add_argument('--file', type=open, action=LoadFromFile)
     def __call__(self, parser, namespace, values, option_string=None):
         if values.name.endswith("yaml") or values.name.endswith("yml"):
@@ -157,6 +243,19 @@ class LoadFromFile(argparse.Action):
 
 
 class LoadFromCheckpoint(argparse.Action):
+    """
+    Action to load model configuration and path from a checkpoint.
+
+    Args:
+        parser (argparse.ArgumentParser): The argument parser object.
+        namespace (argparse.Namespace): The namespace containing parsed arguments.
+        values (str): The value associated with the argument.
+        option_string (str, optional): The option string passed to the argument.
+
+    Raises:
+        ValueError: If there are unknown arguments in the loaded configuration.
+
+    """
     # parser.add_argument('--file', type=open, action=LoadFromFile)
     def __call__(self, parser, namespace, values, option_string=None):
         hparams_path = join(dirname(values), "hparams.yaml")
@@ -175,6 +274,18 @@ class LoadFromCheckpoint(argparse.Action):
 
 
 def save_argparse(args, filename, exclude=None):
+    """
+    Save argparse arguments to a YAML file.
+
+    Args:
+        args (argparse.Namespace): The parsed arguments object.
+        filename (str): The name of the file to save to.
+        exclude (str or list, optional): Arguments to exclude from saving.
+
+    Raises:
+        ValueError: If the filename extension is not yaml or yml.
+
+    """
     if filename.endswith("yaml") or filename.endswith("yml"):
         if isinstance(exclude, str):
             exclude = [exclude]
@@ -187,6 +298,16 @@ def save_argparse(args, filename, exclude=None):
 
 
 def number(text):
+    """
+    Converts a textual representation of a number to an appropriate numeric type.
+
+    Args:
+        text (str): The textual representation of the number.
+
+    Returns:
+        int or float or None: The converted numeric value or None if text is invalid.
+
+    """
     if text is None or text == "None":
         return None
 
@@ -492,6 +613,18 @@ def dense_to_sparse(adj: Tensor) -> Tuple[Tensor, Tensor]:
 
 
 def gen_fully_connected_with_hop(pos, mask):
+    """
+    Generates fully connected graph edges with hop constraints based on position and mask inputs.
+
+    Args:
+        pos (torch.Tensor): Tensor of shape (batch_size, num_nodes, num_dims) representing node positions.
+        mask (torch.Tensor): Binary mask of shape (batch_size, num_nodes) indicating node existence.
+
+    Returns:
+        edge_index (torch.Tensor): Sparse edge index tensor of shape (2, num_edges) representing graph edges.
+        edge_type (torch.Tensor): Tensor of shape (num_edges,) indicating edge types after dense-to-sparse conversion.
+    """
+
     batch, nodes = mask.shape
     batch_adj = torch.norm(pos.unsqueeze(1) - pos.unsqueeze(2), p=2, dim=-1) # batch * n * n
     batch_mask_fc = mask[:, :, None] * mask[:, None, :] # batch * n * n

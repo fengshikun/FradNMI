@@ -13,6 +13,91 @@ import os
 
 class DataModule(LightningDataModule):
     def __init__(self, hparams, dataset=None):
+        """
+        DataModule class for managing dataset loading and transformations in a PyTorch Lightning project.
+
+        Args:
+            hparams: Hyperparameters and configurations for the data module.
+            dataset: Optional pre-loaded dataset.
+
+        Attributes:
+            mask_atom: Boolean indicating if masking is applied to atoms.
+            model: The model to be used.
+            train_dataset: The training dataset.
+            val_dataset: The validation dataset.
+            test_dataset: The test dataset.
+            dataset_maybe_noisy: Dataset with optional noise transformations.
+            _mean: Mean of the dataset features.
+            _std: Standard deviation of the dataset features.
+            _saved_dataloaders: Dictionary to store data loaders.
+
+        Methods:
+            setup(stage):
+                Sets up the dataset based on the stage (e.g., 'train', 'val', 'test').
+                
+                Args:
+                    stage (str): Stage of the setup process.
+
+            train_dataloader():
+                Returns the data loader for the training dataset.
+                
+                Returns:
+                    DataLoader: PyTorch DataLoader for the training dataset.
+
+            val_dataloader():
+                Returns the data loader(s) for the validation dataset.
+                
+                Returns:
+                    list[DataLoader]: List containing PyTorch DataLoader(s) for the validation dataset.
+
+            test_dataloader():
+                Returns the data loader for the test dataset.
+                
+                Returns:
+                    DataLoader: PyTorch DataLoader for the test dataset.
+
+            atomref:
+                Returns the atom reference values if available.
+                
+                Returns:
+                    Tensor or None: Atom reference tensor or None if not available.
+
+            mean:
+                Returns the mean of the dataset features.
+                
+                Returns:
+                    Tensor: Mean of the dataset features.
+
+            std:
+                Returns the standard deviation of the dataset features.
+                
+                Returns:
+                    Tensor: Standard deviation of the dataset features.
+
+            _get_dataloader(dataset, stage, store_dataloader=True):
+                Creates and returns a data loader for the specified dataset and stage.
+                
+                Args:
+                    dataset: The dataset to create the DataLoader for.
+                    stage (str): Stage of the setup process.
+                    store_dataloader (bool): Whether to store the DataLoader for future use.
+                
+                Returns:
+                    DataLoader: PyTorch DataLoader for the specified dataset and stage.
+
+            get_energy_data(data):
+                Returns energy data after removing atom reference energies.
+                
+                Args:
+                    data: Input data containing atomic positions and energy.
+                
+                Returns:
+                    Tensor: Energy data with atom reference energies removed.
+
+            _standardize():
+                Computes and sets the mean and standard deviation of the dataset.
+        """
+
         super(DataModule, self).__init__()
         self._set_hparams(hparams.__dict__ if hasattr(hparams, "__dict__") else hparams)
         # self.hparams = hparams.__dict__ if hasattr(hparams, "__dict__") else hparams

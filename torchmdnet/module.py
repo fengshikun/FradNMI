@@ -14,6 +14,98 @@ from torchmdnet.utils import gen_fully_connected_with_hop, process_input
 
 class LNNP(LightningModule):
     def __init__(self, hparams, prior_model=None, mean=None, std=None):
+        """
+        Lightning Module for LNNP (Learnable Neural Network Potential).
+
+        This module defines the neural network architecture and training logic for a potential model
+
+        Args:
+            hparams (Namespace): Hyperparameters for the model.
+            prior_model (optional): Prior model to initialize. Defaults to None.
+            mean (optional): Mean value for data normalization. Defaults to None.
+            std (optional): Standard deviation value for data normalization. Defaults to None.
+
+        Attributes:
+            model: The neural network model for the potential.
+            ema (dict): Exponential moving averages for model parameters.
+            losses (dict): Dictionary to store various loss values during training.
+            sep_noisy_node (bool): Flag indicating whether to apply seperate input for noisy node.
+            train_loss_type (str): Type of loss function used during training.
+            criterion: Loss criterion, initialized if `mask_atom` is True.
+            bond_length_scale (float): noise factor for bond length(special for bat noise).
+            dataset (LBADataset): Dataset used for training.
+
+        Methods:
+            configure_optimizers():
+                Configures the optimizer and learning rate scheduler for training.
+                Returns:
+                    tuple: Optimizers and LR schedulers.
+            
+            forward(z, pos, batch=None, batch_org=None, egnn_dict=None, radius_edge_index=None):
+                Performs forward pass through the model.
+                Args:
+                    z (Tensor): Node features.
+                    pos (Tensor): Node positions.
+                    batch (optional, Tensor): Batch indices. Defaults to None.
+                    batch_org (optional, Tensor): Original batch indices. Defaults to None.
+                    egnn_dict (optional, dict): Dictionary for EGNNTorch model. Defaults to None.
+                    radius_edge_index (optional, Tensor): Edge indices for radius for PaiNN model. Defaults to None.
+                Returns:
+                    Tensor: Model predictions.
+
+            training_step(batch, batch_idx):
+                Performs a single training step.
+                Args:
+                    batch (Tensor): Training batch.
+                    batch_idx (int): Batch index.
+                Returns:
+                    Tensor: Computed loss.
+
+            validation_step(batch, batch_idx, *args):
+                Performs a single validation step.
+                Args:
+                    batch (Tensor): Validation batch.
+                    batch_idx (int): Batch index.
+                    *args: Additional arguments.
+                Returns:
+                    Tensor: Computed loss.
+
+            test_step(batch, batch_idx):
+                Performs a single test step.
+                Args:
+                    batch (Tensor): Test batch.
+                    batch_idx (int): Batch index.
+                Returns:
+                    Tensor: Computed loss.
+
+            process_batch_idx(batch):
+                Processes the indices of bond_target, angle_target, and dihedral_target in the batch.
+
+            step(batch, loss_fn, stage):
+                Executes a step (training, validation, or test) in the model pipeline.
+                Args:
+                    batch (Tensor): Input batch.
+                    loss_fn: Loss function.
+                    stage (str): Stage of execution ('train', 'val', 'test').
+                Returns:
+                    Tensor: Computed loss.
+
+            optimizer_step(*args, **kwargs):
+                Custom optimizer step that scales learning rate during warm-up.
+
+            training_epoch_end(training_step_outputs):
+                Callback function called at the end of each training epoch.
+
+            compute_metrics_lba(predictions, targets):
+                Computes evaluation metrics (Spearman correlation, RMSE, Pearson correlation) for LBA.
+
+            test_epoch_end(outputs):
+                Callback function called at the end of testing epoch.
+
+            validation_epoch_end(validation_step_outputs):
+                Callback function called at the end of each validation epoch.
+        """
+
         super(LNNP, self).__init__()
         self.save_hyperparameters(hparams)
 
@@ -620,6 +712,20 @@ class LNNP(LightningModule):
 
 class CustomScheduler(_LRScheduler):
     def __init__(self, optimizer, max_lr, min_lr, iters_per_epoch, num_epochs, last_epoch=-1):
+        """
+        Custom learning rate scheduler for optimizer.
+
+        Args:
+            optimizer (torch.optim.Optimizer): Optimizer instance.
+            max_lr (float): Maximum learning rate during training.
+            min_lr (float): Minimum learning rate during training.
+            iters_per_epoch (int): Number of iterations per epoch.
+            num_epochs (int): Total number of epochs for training.
+            last_epoch (int, optional): Index of the last epoch. Default is -1.
+        Returns:
+            list: List of new learning rates for each parameter group in the optimizer.
+        """
+
         self.max_lr = max_lr
         self.min_lr = min_lr
         self.iters_per_epoch = iters_per_epoch

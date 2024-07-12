@@ -39,6 +39,16 @@ def visualize_basis(basis_type, num_rbf=50, cutoff_lower=0, cutoff_upper=5):
 
 class NeighborEmbedding(MessagePassing):
     def __init__(self, hidden_channels, num_rbf, cutoff_lower, cutoff_upper, max_z=100):
+        """
+        NeighborEmbedding module for message passing in graph neural networks.
+
+        Args:
+        - hidden_channels (int): Size of hidden embeddings.
+        - num_rbf (int): Number of radial basis functions.
+        - cutoff_lower (float): Lower cutoff distance for interactions.
+        - cutoff_upper (float): Upper cutoff distance for interactions.
+        - max_z (int, optional): Maximum atomic number for embeddings. (default: 100)
+        """
         super(NeighborEmbedding, self).__init__(aggr="add")
         self.embedding = nn.Embedding(max_z, hidden_channels)
         self.distance_proj = nn.Linear(num_rbf, hidden_channels)
@@ -56,6 +66,19 @@ class NeighborEmbedding(MessagePassing):
 
     def forward(self, z, x, edge_index, edge_weight, edge_attr):
         # remove self loops
+        """
+        Forward pass for the NeighborEmbedding module.
+
+        Args:
+        - z (torch.Tensor): Atomic numbers tensor.
+        - x (torch.Tensor): Node feature tensor.
+        - edge_index (torch.Tensor): Edge indices tensor.
+        - edge_weight (torch.Tensor): Edge weights tensor.
+        - edge_attr (torch.Tensor): Edge attributes tensor.
+
+        Returns:
+        - torch.Tensor: Updated node features after neighbor embedding.
+        """
         mask = edge_index[0] != edge_index[1]
         if not mask.all():
             edge_index = edge_index[:, mask]
@@ -77,6 +100,15 @@ class NeighborEmbedding(MessagePassing):
 
 class GaussianSmearing(nn.Module):
     def __init__(self, cutoff_lower=0.0, cutoff_upper=5.0, num_rbf=50, trainable=True):
+        """
+        Gaussian smearing module for expanding distances into a series of Gaussian basis functions.
+
+        Args:
+        - cutoff_lower (float, optional): Lower cutoff distance. (default: 0.0)
+        - cutoff_upper (float, optional): Upper cutoff distance. (default: 5.0)
+        - num_rbf (int, optional): Number of radial basis functions. (default: 50)
+        - trainable (bool, optional): Whether to make the parameters trainable. (default: True)
+        """
         super(GaussianSmearing, self).__init__()
         self.cutoff_lower = cutoff_lower
         self.cutoff_upper = cutoff_upper
@@ -108,6 +140,15 @@ class GaussianSmearing(nn.Module):
 
 class ExpNormalSmearing(nn.Module):
     def __init__(self, cutoff_lower=0.0, cutoff_upper=5.0, num_rbf=50, trainable=True):
+        """
+        Exponential normal smearing module for expanding distances into a series of exponential normal basis functions.
+
+        Args:
+        - cutoff_lower (float, optional): Lower cutoff distance. (default: 0.0)
+        - cutoff_upper (float, optional): Upper cutoff distance. (default: 5.0)
+        - num_rbf (int, optional): Number of radial basis functions. (default: 50)
+        - trainable (bool, optional): Whether to make the parameters trainable. (default: True)
+        """
         super(ExpNormalSmearing, self).__init__()
         self.cutoff_lower = cutoff_lower
         self.cutoff_upper = cutoff_upper
@@ -152,6 +193,17 @@ class ExpNormalSmearing(nn.Module):
 
 class ShiftedSoftplus(nn.Module):
     def __init__(self):
+        """
+        Shifted Softplus activation function.
+
+        The Shifted Softplus is a variant of the Softplus activation function with a constant shift to ensure it has zero mean at zero input.
+
+        Attributes:
+        - shift (float): The constant shift value, equal to log(2).
+
+        Methods:
+        - forward(x): Applies the Shifted Softplus activation function to the input tensor `x`.
+        """
         super(ShiftedSoftplus, self).__init__()
         self.shift = torch.log(torch.tensor(2.0)).item()
 
@@ -161,11 +213,36 @@ class ShiftedSoftplus(nn.Module):
 
 class CosineCutoff(nn.Module):
     def __init__(self, cutoff_lower=0.0, cutoff_upper=5.0):
+        """
+        Cosine Cutoff function for interatomic distances.
+
+        This function applies a cosine cutoff to smooth the transition to zero for interatomic distances 
+        near the specified cutoff values. It ensures that interactions smoothly go to zero as distances 
+        approach the upper cutoff.
+
+        Args:
+            cutoff_lower (float): Lower cutoff distance. Default is 0.0.
+            cutoff_upper (float): Upper cutoff distance. Default is 5.0.
+        """
         super(CosineCutoff, self).__init__()
         self.cutoff_lower = cutoff_lower
         self.cutoff_upper = cutoff_upper
 
     def forward(self, distances):
+        """
+        Applies a cosine cutoff function to the given distances. The function ensures that interactions smoothly 
+        transition to zero as distances approach the cutoff values. 
+
+        If `cutoff_lower` is greater than 0, contributions below the lower cutoff radius and beyond the upper cutoff 
+        radius are removed.
+
+        Args:
+            distances (torch.Tensor): Tensor of interatomic distances.
+
+        Returns:
+            torch.Tensor: Tensor of cutoff values, with the same shape as the input distances, where each value has 
+            been modified by the cosine cutoff function.
+        """
         if self.cutoff_lower > 0:
             cutoffs = 0.5 * (
                 torch.cos(
@@ -191,6 +268,30 @@ class CosineCutoff(nn.Module):
 
 
 class Distance(nn.Module):
+    """
+    Module for computing interatomic distances and corresponding vectors based on position data.
+
+    Args:
+        cutoff_lower (float): Lower cutoff distance for interatomic interactions.
+        cutoff_upper (float): Upper cutoff distance for interatomic interactions.
+        max_num_neighbors (int, optional): Maximum number of neighbors to return for each atom.
+            Defaults to 32.
+        return_vecs (bool, optional): Whether to return distance vectors. Defaults to False.
+        loop (bool, optional): Whether to include self-loops in the graph. Defaults to False.
+
+    Inputs:
+        pos (torch.Tensor): Tensor of atom positions with shape (num_atoms, num_dimensions).
+        batch (torch.Tensor): Tensor indicating the batch index for each atom.
+
+    Returns:
+        tuple: A tuple containing:
+            - edge_index (torch.LongTensor): Index tensor of shape (2, num_edges) representing
+            edges between atoms.
+            - edge_weight (torch.Tensor): Tensor of shape (num_edges,) representing edge weights
+            (distances or norms of distance vectors).
+            - edge_vec (torch.Tensor or None): Tensor of shape (num_edges, num_dimensions) representing
+            distance vectors if `return_vecs` is True, otherwise None.
+    """
     def __init__(
         self,
         cutoff_lower,
@@ -241,8 +342,25 @@ class Distance(nn.Module):
 class GatedEquivariantBlock(nn.Module):
     """Gated Equivariant Block as defined in Schütt et al. (2021):
     Equivariant message passing for the prediction of tensorial properties and molecular spectra
-    """
+    Args:
+    hidden_channels (int): Number of input channels or hidden dimensions.
+    out_channels (int): Number of output channels.
+    intermediate_channels (int, optional): Number of channels in the intermediate layer.
+        Defaults to None, which sets it to `hidden_channels`.
+    activation (str, optional): Type of activation function to use. Defaults to "silu".
+    scalar_activation (bool, optional): Whether to apply activation function to scalar output `x`.
+        Defaults to False.
 
+    Inputs:
+        x (torch.Tensor): Input tensor of shape (batch_size, hidden_channels).
+        v (torch.Tensor): Input tensor of shape (batch_size, num_edges, hidden_channels).
+
+    Returns:
+        tuple: A tuple containing:
+            - x (torch.Tensor): Output tensor of shape (batch_size, out_channels).
+            - v (torch.Tensor): Output tensor of shape (batch_size, num_edges, out_channels),
+            representing updated edge features.
+    """
     def __init__(
         self,
         hidden_channels,

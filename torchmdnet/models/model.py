@@ -12,6 +12,28 @@ import warnings
 
 
 def create_model(args, prior_model=None, mean=None, std=None):
+    """
+    Create a TorchMD model based on specified arguments.
+
+    Args:
+        args (dict): Dictionary containing model configuration parameters.
+        prior_model (torch.nn.Module, optional): Prior model to incorporate.
+        mean (float, optional): Mean value for normalization.
+        std (float, optional): Standard deviation value for normalization.
+
+    Returns:
+        torch.nn.Module: Created TorchMD model.
+
+    Raises:
+        ValueError: If the specified architecture in `args["model"]` is unknown or invalid.
+        AssertionError: If `args["prior_model"]` is requested but not provided in arguments.
+
+    Notes:
+        This function dynamically creates different types of models based on the `args["model"]` parameter.
+        It supports various configurations including graph-networks, transformers, equivariant transformers,
+        EGNNs, PaiNNs.
+
+    """
     shared_args = dict(
         hidden_channels=args["embedding_dimension"],
         num_layers=args["num_layers"],
@@ -195,6 +217,20 @@ pcq_with_h = {'name': 'pcq',
 
 
 def load_model(filepath, args=None, device="cpu", mean=None, std=None, **kwargs):
+    """
+    Load a TorchMD model from a checkpoint file.
+
+    Args:
+        filepath (str): Filepath to the checkpoint file.
+        args (dict, optional): Dictionary containing model configuration parameters.
+        device (str, optional): Device to load the model onto (default is "cpu").
+        mean (float, optional): Mean value for normalization.
+        std (float, optional): Standard deviation value for normalization.
+        **kwargs: Additional keyword arguments to update `args` with.
+
+    Returns:
+        torch.nn.Module: Loaded TorchMD model.
+    """
     ckpt = torch.load(filepath, map_location="cpu")
     if args is None:
         args = ckpt["hyper_parameters"]
@@ -229,30 +265,9 @@ def load_model(filepath, args=None, device="cpu", mean=None, std=None, **kwargs)
                     new_state_dict2[k][pcq_with_h['atomic_nb']] = new_state_dict[k].T[:-1] + new_state_dict[k.split('.weight')[0] + '.bias']
                     embedding_keys.append(k)
         
-        # new_state_dict2 = {k:v if v.size()==current_model_dict[k].size()  else  current_model_dict[k] for k,v in zip(current_model_dict.keys(), new_state_dict.values())}
-        # for k,v in zip(current_model_dict.keys(), new_state_dict.values()):
-        #     if v.size()!=current_model_dict[k].size():
-        #         print(f'warning {k} shape mismatching, not loaded')
-        
-        # loading_return = model.load_state_dict(state_dict, strict=False)
         loading_return = model.representation_model.load_state_dict(new_state_dict2, strict=False)
         
-        
-        # copy the embedding weight
-        
-        
-        
-        
-        
-        # loading_return = model.load_state_dict(state_dict, strict=False)
-        # loading_return = model.load_state_dict(new_state_dict, strict=False)
-        # if len(loading_return.unexpected_keys) > 0:
-        #     # Should only happen if not applying denoising during fine-tuning.
-        #     # assert all(("output_model_noise" in k or "pos_normalizer" in k) for k in loading_return.unexpected_keys)
-        #     pass
-        # # assert len(loading_return.missing_keys) == 0, f"Missing keys: {loading_return.missing_keys}"
-        # if len(loading_return.missing_keys) > 0:
-        #     print(f'warning:  load model missing keys {loading_return.missing_keys}')
+
     else:
 
         state_dict = {re.sub(r"^model\.", "", k): v for k, v in ckpt["state_dict"].items()}
@@ -291,6 +306,24 @@ class TorchMD_Net(nn.Module):
         output_model_mask_atom=None,
         bond_length_scale=0.,
     ):
+        """
+        TorchMD Network module combining a representation model and an output model for molecular dynamics.
+
+        Args:
+            representation_model (torch.nn.Module): Model for extracting molecular representations.
+            output_model (torch.nn.Module): Model for predicting outputs based on representations.
+            prior_model (torch.nn.Module, optional): Prior model for additional constraints (default: None).
+            reduce_op (str, optional): Reduction operation for aggregating embeddings (default: "add").
+            mean (float or torch.Tensor, optional): Mean value for normalization (default: None).
+            std (float or torch.Tensor, optional): Standard deviation value for normalization (default: None).
+            derivative (bool, optional): Whether to compute derivatives for md tasks (default: False).
+            output_model_noise (torch.nn.ModuleList, optional): Models for predicting noisy outputs (default: None).
+            position_noise_scale (float, optional): Scale for positional noise (default: 0.).
+            no_target_mean (bool, optional): Whether to subtract mean from target (default: False).
+            seperate_noise (bool, optional): Whether apply improved noisy nodes for md17 (default: False).
+            output_model_mask_atom (torch.nn.Module, optional): Model for masking atoms type prediction (default: None).
+            bond_length_scale (float, optional): Scale for bond length (default: 0.).
+        """
         super(TorchMD_Net, self).__init__()
         self.representation_model = representation_model
         self.output_model = output_model
@@ -350,6 +383,22 @@ class TorchMD_Net(nn.Module):
             self.prior_model.reset_parameters()
 
     def forward(self, z, pos, batch: Optional[torch.Tensor] = None, batch_org = None, egnn_dict=None, radius_edge_index=None):
+        """
+        Forward pass of the TorchMD_Net module.
+
+        Args:
+            z (torch.Tensor): Input tensor representing atomic indices.
+            pos (torch.Tensor): Input tensor representing atomic positions.
+            batch (Optional[torch.Tensor], optional): Batch tensor for grouped nodes (default: None).
+            batch_org (None, optional): Default: None.
+            egnn_dict (None, optional): Dictionary of arguments for the EGNN model (default: None).
+            radius_edge_index (None, optional): Edge index for radius (default: None).
+
+        Returns:
+            torch.Tensor: Predicted outputs.
+            torch.Tensor or None: Predicted noise outputs.
+            torch.Tensor or None: Mask logits for masking atoms in outputs.
+        """
         if egnn_dict is not None:
             pred, noise_pred = self.representation_model(h=z, x=pos, edges=egnn_dict['edges'], edge_attr=egnn_dict['edge_attr'], node_mask=egnn_dict['node_mask'], n_nodes=egnn_dict['n_nodes'], mean=self.mean, std=self.std)
             return pred, noise_pred
@@ -498,6 +547,14 @@ class TorchMD_Net(nn.Module):
 class AccumulatedNormalization(nn.Module):
     """Running normalization of a tensor."""
     def __init__(self, accumulator_shape: Tuple[int, ...], epsilon: float = 1e-8):
+        """
+        AccumulatedNormalization module for running normalization of a tensor.
+
+        Args:
+            accumulator_shape (Tuple[int, ...]): Shape of the accumulator tensors.
+            epsilon (float, optional): Small value added to denominator for numerical stability (default: 1e-8).
+
+        """
         super(AccumulatedNormalization, self).__init__()
 
         self._epsilon = epsilon
@@ -507,6 +564,13 @@ class AccumulatedNormalization(nn.Module):
         self.register_buffer("num_accumulations", torch.zeros((1,)))
 
     def update_statistics(self, batch: torch.Tensor):
+        """
+        Update statistics for AccumulatedNormalization module.
+
+        Args:
+            batch (torch.Tensor): Batch tensor to update statistics.
+
+        """
         batch_size = batch.shape[0]
         self.acc_sum += batch.sum(dim=0)
         self.acc_squared_sum += batch.pow(2).sum(dim=0)
@@ -528,6 +592,16 @@ class AccumulatedNormalization(nn.Module):
         ).clamp(min=self._epsilon)
 
     def forward(self, batch: torch.Tensor):
+        """
+        Forward pass of the AccumulatedNormalization module.
+
+        Args:
+            batch (torch.Tensor): Batch tensor to be normalized.
+
+        Returns:
+            torch.Tensor: Normalized batch tensor.
+
+        """
         if self.training:
             self.update_statistics(batch)
         return ((batch - self.mean) / self.std)

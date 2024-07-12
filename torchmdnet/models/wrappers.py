@@ -27,6 +27,30 @@ class BaseWrapper(nn.Module, metaclass=ABCMeta):
 
 class AtomFilter(BaseWrapper):
     def __init__(self, model, remove_threshold):
+        """
+        Wrapper module that filters atoms based on a threshold value.
+
+        Args:
+            model (nn.Module): PyTorch model to wrap and filter atoms.
+            remove_threshold (float): Threshold value for filtering atoms based on their properties.
+
+        Inputs:
+            z (torch.Tensor): Atom properties tensor.
+            pos (torch.Tensor): Atom positions tensor.
+            batch (torch.Tensor, optional): Batch tensor for grouping atoms. Defaults to None.
+
+        Returns:
+            tuple: A tuple containing:
+                - x (torch.Tensor): Output tensor from the wrapped model.
+                - v (torch.Tensor, optional): Edge feature tensor, if available.
+                - z (torch.Tensor): Filtered atom properties tensor.
+                - pos (torch.Tensor): Filtered atom positions tensor.
+                - batch (torch.Tensor, optional): Filtered batch tensor.
+                
+        Raises:
+            AssertionError: If all atoms in any sample are filtered out, ensuring at least one atom per
+                sample exists with Z > remove_threshold.
+        """
         super(AtomFilter, self).__init__(model)
         self.remove_threshold = remove_threshold
 

@@ -175,6 +175,23 @@ class TorchMD_ET(nn.Module):
             self.out_norm_vec.reset_parameters()
 
     def forward(self, z, pos, batch):
+        """
+        Forward pass of the model.
+
+        Args:
+            z (torch.Tensor): Input tensor containing node or atom types.
+            pos (torch.Tensor): Tensor containing the positions of the nodes.
+            batch (torch.Tensor): Batch indices for the input data.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+                - xnew (torch.Tensor): Output node embedding tensor after the final normalization.
+                - vec (torch.Tensor): Final vector embedding tensor after attention layers.
+                - Optional nvec (torch.Tensor): Separate normalized vector tensor if separate noise is used.
+                - z (torch.Tensor): Input tensor containing node or atom types.
+                - pos (torch.Tensor): Tensor containing the positions of the nodes.
+                - batch (torch.Tensor): Batch indices for the input data.
+        """
         x = self.embedding(z)
 
         edge_index, edge_weight, edge_vec = self.distance(pos, batch)
@@ -244,6 +261,33 @@ class EquivariantMultiHeadAttention(MessagePassing):
         cutoff_lower,
         cutoff_upper,
     ):
+        """
+        Initializes the EquivariantMultiHeadAttention layer.
+
+        Parameters
+        ----------
+        hidden_channels : int
+            The number of hidden channels.
+        num_rbf : int
+            The number of radial basis functions.
+        distance_influence : str
+            Indicates whether distances influence keys, values, or both.
+        num_heads : int
+            The number of attention heads.
+        activation : callable
+            The activation function.
+        attn_activation : str
+            The name of the attention activation function.
+        cutoff_lower : float
+            The lower cutoff value for distances.
+        cutoff_upper : float
+            The upper cutoff value for distances.
+
+        Raises
+        ------
+        AssertionError
+            If the number of hidden channels is not evenly divisible by the number of attention heads.
+        """
         super(EquivariantMultiHeadAttention, self).__init__(aggr="add", node_dim=0)
         assert hidden_channels % num_heads == 0, (
             f"The number of hidden channels ({hidden_channels}) "
@@ -297,6 +341,31 @@ class EquivariantMultiHeadAttention(MessagePassing):
             self.dv_proj.bias.data.fill_(0)
 
     def forward(self, x, vec, edge_index, r_ij, f_ij, d_ij):
+        """
+        Forward pass for the EquivariantMultiHeadAttention layer.
+
+        Parameters
+        ----------
+        x : Tensor
+            Node feature matrix.
+        vec : Tensor
+            Vector features.
+        edge_index : Tensor
+            Graph connectivity with shape [2, num_edges].
+        r_ij : Tensor
+            Distance of edges.
+        f_ij : Tensor
+            Radial basis function values for edges.
+        d_ij : Tensor
+            Edge vectors.
+
+        Returns
+        -------
+        dx : Tensor
+            The updated node feature matrix.
+        dvec : Tensor
+            The updated vector features.
+        """
         x = self.layernorm(x)
         q = self.q_proj(x).reshape(-1, self.num_heads, self.head_dim)
         k = self.k_proj(x).reshape(-1, self.num_heads, self.head_dim)
@@ -339,6 +408,22 @@ class EquivariantMultiHeadAttention(MessagePassing):
         return dx, dvec
 
     def message(self, q_i, k_j, v_j, vec_j, dk, dv, r_ij, d_ij):
+        """
+        Perform attention-based message passing.
+
+        Parameters:
+        - q_i (torch.Tensor): Query tensor for attention calculation.
+        - k_j (torch.Tensor): Key tensor for attention calculation.
+        - v_j (torch.Tensor): Value tensor.
+        - vec_j (torch.Tensor): Additional vector tensor.
+        - dk (torch.Tensor or None): transfer from the edge attr tensor.
+        - dv (torch.Tensor or None): transfer from the edge attr tensor.
+        - r_ij (torch.Tensor): Tensor of distance.
+        - d_ij (torch.Tensor): Tensor of vector.
+
+        Returns:
+        - Tuple[torch.Tensor, torch.Tensor]: Updated tensors after attention and feature updates.
+        """
         # attention mechanism
         if dk is None:
             attn = (q_i * k_j).sum(dim=-1)
@@ -368,6 +453,18 @@ class EquivariantMultiHeadAttention(MessagePassing):
         ptr: Optional[torch.Tensor],
         dim_size: Optional[int],
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Aggregate features based on indices using scatter operation.
+
+        Parameters:
+        - features (Tuple[torch.Tensor, torch.Tensor]): Tuple of feature tensors to aggregate.
+        - index (torch.Tensor): Index tensor for scatter operation.
+        - ptr (torch.Tensor or None): Optional pointer tensor.
+        - dim_size (int or None): Size of the dimension to scatter.
+
+        Returns:
+        - Tuple[torch.Tensor, torch.Tensor]: Aggregated tensors x and vec.
+        """
         x, vec = features
         x = scatter(x, index, dim=self.node_dim, dim_size=dim_size)
         vec = scatter(vec, index, dim=self.node_dim, dim_size=dim_size)
@@ -396,6 +493,46 @@ class EquivariantLayerNorm(nn.Module):
         device=None,
         dtype=None,
     ) -> None:
+        """
+        Rotationally-equivariant Vector Layer Normalization.
+
+        Expects inputs with shape (N, n, d), where N is batch size, n is vector dimension, d is width/number of vectors.
+
+        Args:
+            normalized_shape (int): Expected shape of the input tensor, specifically the dimension n.
+            eps (float, optional): A small value added to the covariance matrix to ensure numerical stability. Default is 1e-5.
+            elementwise_linear (bool, optional): If True, applies element-wise linear transformation. Default is True.
+            device (torch.device, optional): Device allocation for parameters. Default is None.
+            dtype (torch.dtype, optional): Data type specification. Default is None.
+
+        Returns:
+            None
+
+        Attributes:
+            normalized_shape (Tuple[int, ...]): Normalized shape of the input tensor.
+            eps (float): Small value added to the covariance matrix.
+            elementwise_linear (bool): Indicates if element-wise linear transformation is applied.
+
+        Methods:
+            reset_parameters() -> None:
+                Resets parameters of the layer.
+                
+            mean_center(input: torch.Tensor) -> torch.Tensor:
+                Centers the input tensor by subtracting the mean across the last dimension.
+                
+            covariance(input: torch.Tensor) -> torch.Tensor:
+                Computes the covariance matrix of the input tensor.
+                
+            symsqrtinv(matrix: torch.Tensor) -> torch.Tensor:
+                Computes the inverse square root of a positive definite matrix.
+                
+            forward(input: torch.Tensor) -> torch.Tensor:
+                Performs the forward pass of the layer normalization.
+                
+            extra_repr() -> str:
+                Returns a string representation of the layer's attributes.
+        """
+        
         factory_kwargs = {"device": device, "dtype": dtype}
         super(EquivariantLayerNorm, self).__init__()
 

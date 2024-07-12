@@ -11,6 +11,13 @@ __all__ = ["Scalar", "DipoleMoment", "ElectronicSpatialExtent", "MaskHead", "Ele
 
 
 class OutputModel(nn.Module, metaclass=ABCMeta):
+    """
+    Base class for output models in TorchMD_Net.
+
+    Args:
+        allow_prior_model (bool): Flag indicating whether prior models are allowed.
+
+    """
     def __init__(self, allow_prior_model):
         super(OutputModel, self).__init__()
         self.allow_prior_model = allow_prior_model
@@ -28,6 +35,16 @@ class OutputModel(nn.Module, metaclass=ABCMeta):
 
 class MaskHead(OutputModel):
     def __init__(self, hidden_channels, activation="silu", allow_prior_model=True, atom_num=119):
+        """
+        MaskHead class for generating atom mask predictions.
+
+        Args:
+            hidden_channels (int): Number of hidden channels in the linear layers.
+            activation (str): Activation function name. Defaults to "silu".
+            allow_prior_model (bool): Flag indicating whether prior models are allowed. Defaults to True.
+            atom_num (int): Number of atoms in the output prediction. Defaults to 119.
+
+        """
         super(MaskHead, self).__init__(allow_prior_model=allow_prior_model)
         act_class = act_class_mapping[activation]
         self.output_network = nn.Sequential(
@@ -50,6 +67,15 @@ class MaskHead(OutputModel):
 
 class Scalar(OutputModel):
     def __init__(self, hidden_channels, activation="silu", allow_prior_model=True):
+        
+        """
+        Scalar class for generating scalar predictions.
+
+        Args:
+            hidden_channels (int): Number of hidden channels in the linear layers.
+            activation (str): Activation function name. Defaults to "silu".
+            allow_prior_model (bool): Flag indicating whether prior models are allowed. Defaults to True.
+        """
         super(Scalar, self).__init__(allow_prior_model=allow_prior_model)
         act_class = act_class_mapping[activation]
         self.output_network = nn.Sequential(
@@ -72,6 +98,14 @@ class Scalar(OutputModel):
 
 class EquivariantScalar(OutputModel):
     def __init__(self, hidden_channels, activation="silu", allow_prior_model=True):
+        """
+        EquivariantScalar class for generating equivariant scalar predictions.
+
+        Args:
+            hidden_channels (int): Number of hidden channels in the linear layers.
+            activation (str): Activation function name. Defaults to "silu".
+            allow_prior_model (bool): Flag indicating whether prior models are allowed. Defaults to True.
+        """
         super(EquivariantScalar, self).__init__(allow_prior_model=allow_prior_model)
         self.output_network = nn.ModuleList(
             [
@@ -100,6 +134,13 @@ class EquivariantScalar(OutputModel):
 
 class DipoleMoment(Scalar):
     def __init__(self, hidden_channels, activation="silu"):
+        """
+        DipoleMoment class, inheriting from Scalar, for predicting dipole moments.
+
+        Args:
+            hidden_channels (int): Number of hidden channels in the linear layers.
+            activation (str): Activation function name. Defaults to "silu".
+        """
         super(DipoleMoment, self).__init__(
             hidden_channels, activation, allow_prior_model=False
         )
@@ -121,6 +162,15 @@ class DipoleMoment(Scalar):
 
 class EquivariantDipoleMoment(EquivariantScalar):
     def __init__(self, hidden_channels, activation="silu"):
+        """
+        EquivariantDipoleMoment class, inheriting from EquivariantScalar, for predicting equivariant dipole moments.
+
+        Args:
+            hidden_channels (int): Number of hidden channels in the linear layers.
+            activation (str): Activation function name. Defaults to "silu".
+        """
+        
+        
         super(EquivariantDipoleMoment, self).__init__(
             hidden_channels, activation, allow_prior_model=False
         )
@@ -143,6 +193,15 @@ class EquivariantDipoleMoment(EquivariantScalar):
 
 class ElectronicSpatialExtent(OutputModel):
     def __init__(self, hidden_channels, activation="silu"):
+        
+        """
+        ElectronicSpatialExtent class, inheriting from OutputModel, for predicting electronic spatial extent.
+
+        Args:
+            hidden_channels (int): Number of hidden channels in the linear layers.
+            activation (str): Activation function name. Defaults to "silu".
+        """
+        
         super(ElectronicSpatialExtent, self).__init__(allow_prior_model=False)
         act_class = act_class_mapping[activation]
         self.output_network = nn.Sequential(
@@ -173,46 +232,15 @@ class ElectronicSpatialExtent(OutputModel):
 
 
 
-
-class EquivariantElectronicSpatialExtent2(EquivariantScalar):
-    def __init__(self, hidden_channels, activation="silu"):
-        super(EquivariantElectronicSpatialExtent2, self).__init__(hidden_channels, activation, allow_prior_model=False)
-        # act_class = act_class_mapping[activation]
-        # self.output_network = nn.Sequential(
-        #     nn.Linear(hidden_channels, hidden_channels // 2),
-        #     act_class(),
-        #     nn.Linear(hidden_channels // 2, 1),
-        # )
-        atomic_mass = torch.from_numpy(ase.data.atomic_masses).float()
-        self.register_buffer("atomic_mass", atomic_mass)
-
-        # self.reset_parameters()
-
-    # def reset_parameters(self):
-    #     nn.init.xavier_uniform_(self.output_network[0].weight)
-    #     self.output_network[0].bias.data.fill_(0)
-    #     nn.init.xavier_uniform_(self.output_network[2].weight)
-    #     self.output_network[2].bias.data.fill_(0)
-
-    def pre_reduce(self, x, v: Optional[torch.Tensor], z, pos, batch):
-        # x = self.output_network(x)
-        for layer in self.output_network:
-            x, v = layer(x, v)
-
-        # Get center of mass.
-        mass = self.atomic_mass[z].view(-1, 1)
-        c = scatter(mass * pos, batch, dim=0) / scatter(mass, batch, dim=0)
-
-        x = torch.norm(pos - c[batch], dim=1, keepdim=True) ** 2 * x
-        return x
-
-
-class EquivariantElectronicSpatialExtent(ElectronicSpatialExtent):
-    pass
-
-
 class EquivariantVectorOutput(EquivariantScalar):
     def __init__(self, hidden_channels, activation="silu"):
+        """
+        EquivariantVectorOutput class, inheriting from EquivariantScalar, for predicting vector quantities.
+
+        Args:
+            hidden_channels (int): Number of hidden channels in the linear layers.
+            activation (str): Activation function name. Defaults to "silu".
+        """
         super(EquivariantVectorOutput, self).__init__(
             hidden_channels, activation, allow_prior_model=False
         )
@@ -220,38 +248,4 @@ class EquivariantVectorOutput(EquivariantScalar):
     def pre_reduce(self, x, v, z, pos, batch):
         for layer in self.output_network:
             x, v = layer(x, v)
-        return v.squeeze()
-
-
-class EquivariantVectorOutput2(OutputModel):
-    # def __init__(self, hidden_channels, activation="silu"):
-    #     super(EquivariantVectorOutput, self).__init__(
-    #         hidden_channels, activation, allow_prior_model=False
-    #     )
-
-    # def pre_reduce(self, x, v, z, pos, batch):
-    #     for layer in self.output_network:
-    #         x, v = layer(x, v)
-    #     return v.squeeze()
-    
-    def __init__(self, hidden_channels, activation="silu", allow_prior_model=True):
-        super(EquivariantVectorOutput2, self).__init__(allow_prior_model=allow_prior_model)
-        act_class = act_class_mapping[activation]
-        self.output_network = nn.Sequential(
-            nn.Linear(hidden_channels, hidden_channels // 2),
-            act_class(),
-            nn.Linear(hidden_channels // 2, 1),
-        )
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        nn.init.xavier_uniform_(self.output_network[0].weight)
-        self.output_network[0].bias.data.fill_(0)
-        nn.init.xavier_uniform_(self.output_network[2].weight)
-        self.output_network[2].bias.data.fill_(0)
-
-    def pre_reduce(self, x, v: Optional[torch.Tensor], z, pos, batch):
-        v = self.output_network(v)
-
         return v.squeeze()

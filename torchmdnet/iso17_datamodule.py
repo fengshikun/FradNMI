@@ -31,6 +31,42 @@ forceScale = 1
 
 class ISO17(Dataset):
     def __init__(self, data_dir, species, positions, energies, forces, smiles=None):
+        """
+        ISO17 Dataset class for loading and preprocessing molecular dynamics data.
+
+        Args:
+            data_dir: Directory containing the data files.
+            species: List of species (atoms) for each molecule.
+            positions: List of atomic positions for each molecule.
+            energies: List of energy values for each molecule.
+            forces: List of force values for each molecule.
+            smiles: Optional list of SMILES strings for each molecule.
+
+        Attributes:
+            data_dir: Directory containing the data files.
+            species: List of species (atoms) for each molecule.
+            positions: List of atomic positions for each molecule.
+            energies: List of energy values for each molecule, scaled.
+            forces: List of force values for each molecule, scaled.
+            smiles: Optional list of SMILES strings for each molecule.
+
+        Methods:
+            __getitem__(index):
+                Retrieves a data sample corresponding to the given index.
+                
+                Args:
+                    index (int): Index of the data sample to retrieve.
+                
+                Returns:
+                    Data: A PyTorch Geometric Data object containing atomic numbers, positions, energy, and forces, and optionally SMILES.
+
+            __len__():
+                Returns the number of data samples in the dataset.
+                
+                Returns:
+                    int: Number of data samples in the dataset.
+        """
+
         self.data_dir = data_dir
         self.species = species
         self.positions = positions
@@ -64,14 +100,51 @@ class ISO17(Dataset):
 
 
 class ISO17A(Dataset):
-    def __init__(self, data_dir, species, positions, energies, forces, smiles=None, dihedral_angle_noise_scale=0.1, position_noise_scale=0.005):
+    def __init__(self, data_dir, species, positions, energies, forces, smiles=None, position_noise_scale=0.005):
+        """
+        ISO17 Dataset class for loading and preprocessing molecular dynamics data, applying the noisy node.
+
+        Args:
+            data_dir: Directory containing the data files.
+            species: List of species (atoms) for each molecule.
+            positions: List of atomic positions for each molecule.
+            energies: List of energy values for each molecule.
+            forces: List of force values for each molecule.
+            smiles: Optional list of SMILES strings for each molecule.
+            position_noise_scale: Scale of the random noise to apply to atomic positions.
+
+        Attributes:
+            data_dir: Directory containing the data files.
+            species: List of species (atoms) for each molecule.
+            positions: List of atomic positions for each molecule.
+            energies: List of energy values for each molecule, scaled.
+            forces: List of force values for each molecule, scaled.
+            smiles: Optional list of SMILES strings for each molecule.
+            position_noise_scale: Scale of the random noise to apply to atomic positions.
+
+        Methods:
+            __getitem__(index):
+                Retrieves a data sample corresponding to the given index.
+                
+                Args:
+                    index (int): Index of the data sample to retrieve.
+                
+                Returns:
+                    Data: A PyTorch Geometric Data object containing atomic numbers, positions, energy, and forces, and optionally SMILES.
+
+            __len__():
+                Returns the number of data samples in the dataset.
+                
+                Returns:
+                    int: Number of data samples in the dataset.
+        """
         self.data_dir = data_dir
         self.species = species
         self.positions = positions
         self.energies = [e * energyScale for e in energies]
         self.forces = [f * forceScale for f in forces]
         self.smiles = smiles
-        self.dihedral_angle_noise_scale = dihedral_angle_noise_scale
+        # self.dihedral_angle_noise_scale = dihedral_angle_noise_scale
         self.position_noise_scale = position_noise_scale
 
     def __getitem__(self, index):
@@ -120,6 +193,79 @@ class ISO17A(Dataset):
 
 class ISO17DataModule(LightningDataModule):
     def __init__(self, hparams, dataset=None):
+        """
+        ISO17DataModule is a PyTorch Lightning data module for loading and preprocessing the ISO17 dataset.
+
+        Args:
+            hparams: Hyperparameters for the data module.
+            dataset (optional): Preloaded dataset if available.
+
+        Attributes:
+            _mean: Mean of the dataset.
+            _std: Standard deviation of the dataset.
+            _dy_mean: Mean of the dataset forces.
+            _dy_std: Standard deviation of the dataset forces.
+            _saved_dataloaders: Dictionary for storing dataloaders.
+            dataset: The dataset used.
+            args: Hyperparameters for the data module.
+            mask_atom: Atom masking parameter.
+            data_dir: Root directory of the dataset.
+            seed: Seed for random number generation.
+            num_workers: Number of workers for data loading.
+            batch_size: Batch size for training.
+            inference_batch_size: Batch size for inference.
+            train_clean: Preprocessed training dataset.
+            valid_clean: Preprocessed validation dataset.
+            test_clean: Preprocessed test dataset.
+            train_loader: DataLoader for the training dataset.
+            valid_loader: DataLoader for the validation dataset.
+            test_loader: DataLoader for the test dataset.
+
+        Methods:
+            _read_db(db_path): Reads the database and returns species, coordinates, energies, and forces.
+                Args:
+                    db_path: Path to the database file.
+                Returns:
+                    species: List of atomic species.
+                    coordinates: List of atomic coordinates.
+                    energies: Numpy array of energies.
+                    forces: List of forces.
+
+            setup(stage): Sets up the data module for training, validation, and testing.
+                Args:
+                    stage: Stage of the setup ('fit', 'validate', 'test', or 'predict').
+
+            train_dataloader(): Returns the DataLoader for the training dataset.
+                Returns:
+                    DataLoader: DataLoader for the training dataset.
+
+            val_dataloader(): Returns the DataLoader for the validation dataset.
+                Returns:
+                    list: List of DataLoaders for the validation dataset.
+
+            test_dataloader(): Returns the DataLoader for the test dataset.
+                Returns:
+                    DataLoader: DataLoader for the test dataset.
+
+            mean: Property that returns the mean of the dataset.
+                Returns:
+                    torch.Tensor: Mean of the dataset.
+
+            std: Property that returns the standard deviation of the dataset.
+                Returns:
+                    torch.Tensor: Standard deviation of the dataset.
+
+            dy_mean: Property that returns the mean of the dataset forces.
+                Returns:
+                    torch.Tensor: Mean of the dataset forces.
+
+            dy_std: Property that returns the standard deviation of the dataset forces.
+                Returns:
+                    torch.Tensor: Standard deviation of the dataset forces.
+
+            _standardize(): Computes and sets the mean and standard deviation of the dataset.
+        """
+
         super(ISO17DataModule, self).__init__()
         self._mean, self._std = None, None
         self._dy_mean, self._dy_std = None, None
@@ -237,14 +383,14 @@ class ISO17DataModule(LightningDataModule):
                 self.train_clean.data_dir, species=self.train_clean.species,
                 positions=self.train_clean.positions, energies=self.train_clean.energies,
                 forces=self.train_clean.forces,
-                dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
+                # dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
                 position_noise_scale=self.args.position_noise_scale,
             )
             self.valid_dataset = ISO17A(
                 self.valid_clean.data_dir, species=self.valid_clean.species,
                 positions=self.valid_clean.positions, energies=self.valid_clean.energies,
                 forces=self.valid_clean.forces,
-                dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
+                # dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
                 position_noise_scale=self.args.position_noise_scale,
             )
             self.test_dataset = ISO17A(
@@ -252,7 +398,7 @@ class ISO17DataModule(LightningDataModule):
                 positions=self.test_clean.positions, energies=self.test_clean.energies, 
                 forces=self.test_clean.forces,
                 smiles=self.test_clean.smiles,
-                dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
+                # dihedral_angle_noise_scale=self.args.dihedral_angle_noise_scale,
                 position_noise_scale=self.args.position_noise_scale,
             )
 

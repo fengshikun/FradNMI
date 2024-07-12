@@ -117,6 +117,8 @@ class MD17A(InMemoryDataset):
     """Machine learning of accurate energy-conserving molecular force fields (Chmiela et al. 2017)
     This class provides functionality for loading MD trajectories from the original dataset, not the revised versions.
     See http://www.quantum-machine.org/gdml/#datasets for details.
+
+    We process the data by adding noise to atomic coordinates and providing denoising targets for Noisy Nodes task.
     """
 
     raw_url = "http://www.quantum-machine.org/gdml/data/npz/"
@@ -187,6 +189,15 @@ class MD17A(InMemoryDataset):
             MOL_LST = np.load(f"{root}/processed/{MD17A.mol_npy_files[dataset_arg]}", allow_pickle=True)
     
     def transform_noise(self, data, position_noise_scale):
+        """Add Gaussian noise to the input data.
+
+        Args:
+            data (Tensor or np.ndarray): Input data to add noise to.
+            position_noise_scale (float): Scale factor for the Gaussian noise.
+
+        Returns:
+            Tensor or np.ndarray: Noisy data with added Gaussian noise.
+        """
         try:
             if type(data) == np.ndarray:
                 data = torch.from_numpy(data)
@@ -198,6 +209,16 @@ class MD17A(InMemoryDataset):
     
     
     def __getitem__(self, idx):
+        """
+        Retrieves and processes a data item at the specified index, adding noise to atomic coordinates and providing
+        denoising targets for Noisy Nodes.
+
+        Args:
+            idx (int): Index of the data item to retrieve.
+
+        Returns:
+            org_data (Data): Processed data item with original and noisy coordinates, and denoising targets.
+        """
         org_data = super().__getitem__(idx)
         org_atom_num = org_data.pos.shape[0]
         # change org_data coordinate
@@ -264,7 +285,7 @@ class MD17A(InMemoryDataset):
             return org_data
 
 
-        # composition
+        # composition，Frad（RN）
         pos_noise_coords = self.transform_noise(pos_noise_coords_angle, self.position_noise_scale)
         
         org_data.org_pos = org_data.pos
@@ -285,11 +306,20 @@ class MD17A(InMemoryDataset):
 
 
     def len(self):
+        """Return the total number of samples in the dataset."""
         return sum(
             len(slices[list(slices.keys())[0]]) - 1 for slices in self.slices_all
         )
 
     def get(self, idx):
+        """Retrieve the data sample at the specified index.
+
+        Args:
+            idx (int): Index of the data sample to retrieve.
+
+        Returns:
+            Data: Processed data sample.
+        """
         data_idx = 0
         while data_idx < len(self.data_all) - 1 and idx >= self.offsets[data_idx + 1]:
             data_idx += 1
