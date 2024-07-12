@@ -87,9 +87,9 @@ CUDA_VISIBLE_DEVICES=0 python scripts/test.py --conf examples/ET-QM9-FT_dw_0.2_l
 Additionally, we offer the download link for the processed finetuned data at the following URL: [google drive](https://drive.google.com/drive/folders/1qe8EwXSnZ-K8dFaa5HQwWBmFpYYFe2Gn?usp=sharing)
 
 
-Pre-trained models for various tasks are available at the following links:
+### Pre-trained models 
 
-All pre-trained models are uploaded to Zenodo: [Zenodo Link](https://zenodo.org/records/12697467)
+All pre-trained models are uploaded to **Zenodo**: [Zenodo Link](https://zenodo.org/records/12697467)
 
 Alternatively, individual pre-trained models can be accessed via Google Drive:
 
