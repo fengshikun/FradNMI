@@ -93,8 +93,6 @@ All pre-trained models are uploaded to Zenodo: [Zenodo Link](https://zenodo.org/
 
 Alternatively, individual pre-trained models can be accessed via Google Drive:
 
-Alternatively, we also provided google link for each file:
-
 - Pretrained model for QM9: [google drive](https://drive.google.com/drive/folders/1sFH7s_L3hqW4HhR7CC8TBUKjwUeslex1?usp=sharing)
 - Pretrained model for Force Predictioin(MD17, MD22, ISO17): [google drive](https://drive.google.com/drive/folders/18O-XaubUg_XMImAwnqSidaL0-TLszF3F?usp=sharing)
 - Pretrained model for LBA: [google drive](https://drive.google.com/drive/folders/1Z32LO0p1MkF4NTILPzdKH2rIoRmf0ZE6?usp=sharing)
