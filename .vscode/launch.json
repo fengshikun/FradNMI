@@ -17,12 +17,14 @@
             "type": "python",
             "request": "launch",
             "program": "scripts/test.py",
-            "cwd": "/home/fengshikun/Pretraining-Denoising",
+            // "cwd": "/home/fengshikun/Pretraining-Denoising",
+            "cwd": "/data/protein/SKData/Frad_NMI/FradNMI",
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": [
                 "--conf",
-                "examples/ET-QM9-FT.yaml",
+                "examples/ET-QM9-FT_dw_0.2_long.yaml",
+                // "examples/ET-QM9-FT.yaml",
                 "--layernorm-on-vec",
                 "whitened",
                 "--job-id",
@@ -30,8 +32,17 @@
                 "--dataset-arg",
                 "gap",
                 "--pretrained-model",
-                "/home/fengshikun/Pretraining-Denoising/experiments/ET-PCQM4MV2_dih_var0.04_var2_com_re_long_qm9_gap_train_loss_type_smooth_l1_loss_finetuning/step=498799-epoch=579-val_loss=0.0275-test_loss=0.0273-train_per_step=0.0013.ckpt"
-            ]
+                "/data/protein/SKData/DenoisingData/Model_bak/ET-PCQM4MV2_dih_var0.04_var2_com_re/step=399999-epoch=8-val_loss=0.1422-test_loss=0.2784-train_per_step=0.1512.ckpt",
+                "--dataset-root",
+                "/data/protein/SKData/DenoisingData/qm9",
+                "--bond-length-scale", "0",
+                // "/home/fengshikun/Pretraining-Denoising/experiments/ET-PCQM4MV2_dih_var0.04_var2_com_re_long_qm9_gap_train_loss_type_smooth_l1_loss_finetuning/step=498799-epoch=579-val_loss=0.0275-test_loss=0.0273-train_per_step=0.0013.ckpt"
+            ],
+            "env": {
+                // "WANDB_DISABLED": "true",
+                "CUDA_VISIBLE_DEVICES": "0",
+                // "CUDA_LAUNCH_BLOCKING": "1",
+            }
         },
         {
             "name": "Python: Pretraining",
@@ -48,15 +59,21 @@
                 // "examples/ET-PCQM4MV2_dih_var0.04_var2_com_re_32epoch_addh_inte.yaml",
                 // "examples/ET-PCQM4V2_dih_var0.04_var2_predict_force.yaml",
                 "examples/ET-PCQM4MV2_dih_var0.04_var2_com_re.yaml",
+                // "--model", "egnn",
+                // "--model", "painn",
                 "--layernorm-on-vec",
                 "whitened",
                 "--job-id",
                 "pretraining_debug",
                 // "--cod_denoise", "true",
                 "--num-epochs", "8",
-                "--bat-noise", "true",
-                "--batch-size", "16",
+                // "--bat-noise", "true",
+                // "--composition", "false",
+                // "--batch-size", "16",
+                // "--embedding-dimension", "128",
                 "--dataset-root", "/data/protein/SKData/DenoisingData/pcq",
+                // "--dataset", "PCQM4MV2_Dihedral3",
+                // "--dataset", "PCQM4MV2_Dihedral4",
                 
                 // "--rdkit_conf", "true",
                 // "--force_field", "false",
@@ -72,7 +89,7 @@
             ],
             "env": {
                 // "WANDB_DISABLED": "true",
-                "CUDA_VISIBLE_DEVICES": "0",
+                "CUDA_VISIBLE_DEVICES": "3",
                 // "CUDA_LAUNCH_BLOCKING": "1",
             }
         },
@@ -135,25 +152,29 @@
             "request": "launch",
             "program": "scripts/train.py",
             "console": "integratedTerminal",
-            "cwd": "/home/fengshikun/Pretraining-Denoising",
+            "cwd": "/data/protein/SKData/Frad_NMI/FradNMI",
             "justMyCode": false,
             "args": [
                 "--conf",
                 // "examples/ET-QM9-FT-nt.yaml",
                 // "examples/ET-QM9-FT-nt-angel.yaml",
-                "examples/ET-QM9-FT_S.yaml",
+                // "examples/ET-QM9-FT_S.yaml",
+                "examples/ET-QM9-FT_dw_0.2_long.yaml",
                 "--layernorm-on-vec",
                 "whitened",
                 "--job-id",
                 "ET_debug",
                 "--dataset-arg",
-                "energy_U0",
-                "--sep-noisy-node",
-                "true",
-                "--train-loss-type",
-                "smooth_l1_loss",
+                "lumo",
+                // "--sep-noisy-node",
+                // "true",
+                // "--train-loss-type",
+                // "smooth_l1_loss",
+                "--dataset-root", "/data/protein/SKData/DenoisingData/qm9",
                 "--pretrained-model",
-                "/home/fengshikun/Pretraining-Denoising/experiments/ET-PCQM4MV2_denan/step=399999-epoch=8-val_loss=0.1244-test_loss=0.2514-train_per_step=0.1221.ckpt"
+                "/data/protein/SKData/Frad_NMI/FradNMI/experiments/frad_pretraining_10w/step=11407-epoch=7-val_loss=0.2065-test_loss=0.2143-train_per_step=0.2014.ckpt",
+                "--denoising-weight", "0.1", 
+                // "/home/fengshikun/Pretraining-Denoising/experiments/ET-PCQM4MV2_denan/step=399999-epoch=8-val_loss=0.1244-test_loss=0.2514-train_per_step=0.1221.ckpt"
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "7",
@@ -200,6 +221,27 @@
                 "CUDA_VISIBLE_DEVICES": "0",
                 "WANDB_DISABLED": "true"
             }
-        }
+        },
+        {
+            "name": "Python: Pretraining QM9A",
+            "type": "python",
+            "request": "launch",
+            "program": "scripts/train.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--conf", "examples/ET-QM9_dih_var0.04_var2_com_re.yaml",
+                "--layernorm-on-vec", "whitened",
+                "--job-id", "frad_pretraining_qm9_10w",
+                "--num-epochs", "8",
+                "--dataset-root", "/data/protein/SKData/DenoisingData/qm9",
+                "--dataset-arg", "lumo",
+            ],
+            "env": {
+                // "WANDB_DISABLED": "true",
+                "CUDA_VISIBLE_DEVICES": "3",
+                // "CUDA_LAUNCH_BLOCKING": "1",
+            }
+        },
     ]
 }

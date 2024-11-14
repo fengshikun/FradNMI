@@ -13,6 +13,15 @@
 # python finetune_qm9.py --pretrain_model /data/protein/SKData/Frad_NMI/FradNMI/experiments/frad_pretraining_rdkit_10w/step=11407-epoch=7-val_loss=0.2023-test_loss=0.2045-train_per_step=0.1883.ckpt --job_prefix frad_pretraining_rdkit_10w --start_gid 0
 
 # python finetune_qm9.py --pretrain_model /data/protein/SKData/Frad_NMI/FradNMI/experiments/frad_pretraining_denoise_angle/step=386103-epoch=7-val_loss=0.2156-test_loss=0.2038-train_per_step=0.1778.ckpt --job_prefix frad_pretraining_denoise_angle --start_gid 4
+
+
+# python finetune_qm9.py --pretrain_model /data/protein/SKData/Frad_NMI/FradNMI/experiments/frad_pretraining_10w/step=11407-epoch=7-val_loss=0.2065-test_loss=0.2143-train_per_step=0.2014.ckpt --job_prefix frad_pretraining_10w --start_gid 3
+
+# python finetune_qm9.py --pretrain_model /data/protein/SKData/Frad_NMI/FradNMI/experiments/frad_pretraining_denoise_angle/step=386103-epoch=7-val_loss=0.2156-test_loss=0.2038-train_per_step=0.1778.ckpt --job_prefix frad_pretraining_denoise_angle --start_gid 4
+
+# python finetune_qm9.py --pretrain_model /data/protein/SKData/Frad_NMI/FradNMI/experiments/frad_pretraining_denoise_angle_bat/step=386103-epoch=7-val_loss=0.5297-test_loss=0.6069-train_per_step=0.3545.ckpt --job_prefix frad_pretraining_denoise_angle_bat --start_gid 4
+
+
 import os
 import argparse
 
