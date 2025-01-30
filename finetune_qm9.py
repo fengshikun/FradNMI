@@ -13,6 +13,10 @@
 # python finetune_qm9.py --pretrain_model /data/protein/SKData/Frad_NMI/FradNMI/experiments/frad_pretraining_rdkit_10w/step=11407-epoch=7-val_loss=0.2023-test_loss=0.2045-train_per_step=0.1883.ckpt --job_prefix frad_pretraining_rdkit_10w --start_gid 0
 
 # python finetune_qm9.py --pretrain_model /data/protein/SKData/Frad_NMI/FradNMI/experiments/frad_pretraining_denoise_angle/step=386103-epoch=7-val_loss=0.2156-test_loss=0.2038-train_per_step=0.1778.ckpt --job_prefix frad_pretraining_denoise_angle --start_gid 4
+
+
+# python finetune_qm9.py --pretrain_model /mnt/nfs-ssd/data/fengshikun/FradNMI/experiments/frad_pretraining_egnn_h128_n10/step=399999-epoch=7-val_loss=0.9758-test_loss=0.9907-train_per_step=0.9634.ckpt --job_prefix frad_egnn_h128_n10 --start_gid 0 --job_suffix " --model egnn --hidden-nf 128 --n-layers 10 "
+
 import os
 import argparse
 
@@ -57,15 +61,15 @@ QM9_CMD = [
     
 ]
 
-QM9_CMD = [
-    '{} python -u scripts/train.py --conf examples/ET-QM9-FT-nt_dw_0.2_long.yaml --layernorm-on-vec whitened --job-id {}_energy_U0 --dataset-arg energy_U0 --pretrained-model {} {} > {}.log 2>&1 &',
+# QM9_CMD = [
+#     '{} python -u scripts/train.py --conf examples/ET-QM9-FT-nt_dw_0.2_long.yaml --layernorm-on-vec whitened --job-id {}_energy_U0 --dataset-arg energy_U0 --pretrained-model {} {} > {}.log 2>&1 &',
     
-    '{} python -u scripts/train.py --conf examples/ET-QM9-FT-nt_dw_0.2_long.yaml --layernorm-on-vec whitened --job-id {}_energy_U --dataset-arg energy_U --pretrained-model {} {} > {}.log 2>&1 &',
+#     '{} python -u scripts/train.py --conf examples/ET-QM9-FT-nt_dw_0.2_long.yaml --layernorm-on-vec whitened --job-id {}_energy_U --dataset-arg energy_U --pretrained-model {} {} > {}.log 2>&1 &',
     
-    '{} python -u scripts/train.py --conf examples/ET-QM9-FT-nt_dw_0.2_long.yaml --layernorm-on-vec whitened --job-id {}_enthalpy_H --dataset-arg enthalpy_H --pretrained-model {} {} > {}.log 2>&1 &',
+#     '{} python -u scripts/train.py --conf examples/ET-QM9-FT-nt_dw_0.2_long.yaml --layernorm-on-vec whitened --job-id {}_enthalpy_H --dataset-arg enthalpy_H --pretrained-model {} {} > {}.log 2>&1 &',
     
-    '{} python -u scripts/train.py --conf examples/ET-QM9-FT-nt_dw_0.2_long.yaml --layernorm-on-vec whitened --job-id {}_free_energy --dataset-arg free_energy --pretrained-model {} {} > {}.log 2>&1 &',
-]
+#     '{} python -u scripts/train.py --conf examples/ET-QM9-FT-nt_dw_0.2_long.yaml --layernorm-on-vec whitened --job-id {}_free_energy --dataset-arg free_energy --pretrained-model {} {} > {}.log 2>&1 &',
+# ]
 
 
 # qm9_task = {'homo': 2, 'gap': 4}
@@ -73,7 +77,7 @@ QM9_CMD = [
 
 qm9_task = {'lumo': 0, 'homo': 1, 'gap': 2}
 
-qm9_task = {'energy_U0': 0, 'energy_U': 1, 'enthalpy_H': 2, 'free_energy': 3}
+# qm9_task = {'energy_U0': 0, 'energy_U': 1, 'enthalpy_H': 2, 'free_energy': 3}
 
 
 if __name__ == "__main__":
@@ -102,7 +106,7 @@ if __name__ == "__main__":
         
         cmd_prefix1 = cmd_prefix.format(start_gid)
         
-        cmd_suffix1 = cmd_suffix + ' --dataset-root /data/protein/SKData/DenoisingData/qm9'
+        cmd_suffix1 = cmd_suffix + ' --dataset-root /nfs/SKData/DenoisingData/qm9'
         
         exe_cmd = base_cmd.format(cmd_prefix1, job_prefix, pretrain_model, cmd_suffix1, f'{job_prefix}_{task}')
         start_gid += 1

@@ -22,7 +22,8 @@
             "justMyCode": false,
             "args": [
                 "--conf",
-                "examples/ET-QM9-FT.yaml",
+                "examples/ET-QM9-FT_dw_0.2_long.yaml",
+                // "examples/ET-QM9-FT.yaml",
                 "--layernorm-on-vec",
                 "whitened",
                 "--job-id",
@@ -30,7 +31,11 @@
                 "--dataset-arg",
                 "gap",
                 "--pretrained-model",
-                "/home/fengshikun/Pretraining-Denoising/experiments/ET-PCQM4MV2_dih_var0.04_var2_com_re_long_qm9_gap_train_loss_type_smooth_l1_loss_finetuning/step=498799-epoch=579-val_loss=0.0275-test_loss=0.0273-train_per_step=0.0013.ckpt"
+                "/home/fengshikun/Pretraining-Denoising/experiments/ET-PCQM4MV2_dih_var0.04_var2_com_re_long_qm9_gap_train_loss_type_smooth_l1_loss_finetuning/step=498799-epoch=579-val_loss=0.0275-test_loss=0.0273-train_per_step=0.0013.ckpt",
+                "--dataset-root",
+                "/nfs/SKData/qm9",
+                // "/data/protein/SKData/DenoisingData/qm9",
+                "--bond-length-scale", "0",
             ]
         },
         {
@@ -198,6 +203,28 @@
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0",
+                "WANDB_DISABLED": "true"
+            }
+        },
+        {
+            "name": "Python: finetune qm9",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/train.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--conf", "examples/ET-QM9-FT_dw_0.2_long.yaml",
+                "--layernorm-on-vec", "whitened",
+                "--job-id", "egnn_frad_gap",
+                "--dataset-arg", "gap",
+                "--pretrained-model", "/mnt/nfs-ssd/data/fengshikun/FradNMI/experiments/frad_pretraining_painn/step=386103-epoch=7-val_loss=0.2104-test_loss=0.2037-train_per_step=0.1890.ckpt",
+                "--train-loss-type", "smooth_l1_loss",
+                "--model", "egnn",
+                "--dataset-root", "/nfs/SKData/DenoisingData/qm9",
+                "--embedding-dimension", "128",
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "3",
                 "WANDB_DISABLED": "true"
             }
         }
