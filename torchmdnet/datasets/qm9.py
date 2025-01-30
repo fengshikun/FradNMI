@@ -93,7 +93,7 @@ class QM9A(QM9_geometric):
         self.composition = composition
         self.transform_y = transform_y
 
-        raw_sdf_file = os.path.join(root, 'processed/qm9_mols.npy')
+        raw_sdf_file = os.path.join(root, 'fix_qm9_mols.npy')
 
         global MOL_LST
         if MOL_LST is None:

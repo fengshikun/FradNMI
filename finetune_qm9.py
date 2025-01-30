@@ -16,6 +16,12 @@
 
 
 # python finetune_qm9.py --pretrain_model /mnt/nfs-ssd/data/fengshikun/FradNMI/experiments/frad_pretraining_egnn_h128_n10/step=399999-epoch=7-val_loss=0.9758-test_loss=0.9907-train_per_step=0.9634.ckpt --job_prefix frad_egnn_h128_n10 --start_gid 0 --job_suffix " --model egnn --hidden-nf 128 --n-layers 10 "
+# python finetune_qm9.py --pretrain_model /data/protein/SKData/Frad_NMI/FradNMI/experiments/frad_pretraining_10w/step=11407-epoch=7-val_loss=0.2065-test_loss=0.2143-train_per_step=0.2014.ckpt --job_prefix frad_pretraining_10w --start_gid 3
+
+# python finetune_qm9.py --pretrain_model /data/protein/SKData/Frad_NMI/FradNMI/experiments/frad_pretraining_denoise_angle/step=386103-epoch=7-val_loss=0.2156-test_loss=0.2038-train_per_step=0.1778.ckpt --job_prefix frad_pretraining_denoise_angle --start_gid 4
+
+# python finetune_qm9.py --pretrain_model /data/protein/SKData/Frad_NMI/FradNMI/experiments/frad_pretraining_denoise_angle_bat/step=386103-epoch=7-val_loss=0.5297-test_loss=0.6069-train_per_step=0.3545.ckpt --job_prefix frad_pretraining_denoise_angle_bat --start_gid 4
+
 
 import os
 import argparse
